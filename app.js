@@ -70,12 +70,12 @@ async function resolveSearchEntity(term){
 }
 async function categoryFiles(category,limit=80){
   if(!category)return[];
-  const p=new URLSearchParams({action:'query',generator:'categorymembers',gcmtitle:'Category:'+category,gcmtype:'file',gcmlimit:String(limit),prop:'imageinfo',iiprop:'url|extmetadata',iiurlwidth:'600',format:'json',origin:'*'});
+  const p=new URLSearchParams({action:'query',generator:'categorymembers',gcmtitle:'Category:'+category,gcmtype:'file',gcmlimit:String(limit),prop:'imageinfo',iiprop:'url|mime|mediatype|commonmetadata|extmetadata',iiurlwidth:'600',format:'json',origin:'*'});
   const r=await fetch('https://commons.wikimedia.org/w/api.php?'+p),d=await r.json();
   return Object.values(d.query?.pages||{});
 }
 async function commonsPages(searchText,limit=30){
-  const p=new URLSearchParams({action:'query',generator:'search',gsrsearch:searchText,gsrnamespace:'6',gsrlimit:String(limit),prop:'imageinfo',iiprop:'url|extmetadata',iiurlwidth:'600',format:'json',origin:'*'});
+  const p=new URLSearchParams({action:'query',generator:'search',gsrsearch:searchText,gsrnamespace:'6',gsrlimit:String(limit),prop:'imageinfo',iiprop:'url|mime|mediatype|commonmetadata|extmetadata',iiurlwidth:'600',format:'json',origin:'*'});
   const r=await fetch('https://commons.wikimedia.org/w/api.php?'+p),d=await r.json();
   return Object.values(d.query?.pages||{});
 }
@@ -89,6 +89,28 @@ function relevanceScore(page,term){
   if(title.includes(needle))score+=60;
   if(object.includes(needle))score+=45;
   if(desc.includes(needle))score+=30;
+  return score;
+}
+function photoLikelihood(page){
+  const i=page.imageinfo?.[0]||{},m=i.extmetadata||{},cm=i.commonmetadata||{};
+  const title=(page.title||'').replace(/^File:/,'').toLocaleLowerCase();
+  const desc=strip(m.ImageDescription?.value).toLocaleLowerCase();
+  const mime=(i.mime||'').toLocaleLowerCase();
+  let score=0;
+  if(mime==='image/jpeg')score+=35;
+  else if(mime==='image/webp')score+=25;
+  else if(mime==='image/png')score+=10;
+  else if(mime.includes('tiff')||mime.includes('djvu')||mime.includes('pdf'))score-=80;
+
+  const cameraKeys=['Make','Model','DateTimeOriginal','ExposureTime','FNumber','ISOSpeedRatings','FocalLength'];
+  if(cameraKeys.some(k=>cm[k]||m[k]?.value))score+=70;
+
+  const photoWords=/\b(photo|photograph|photography|camera|taken|shot|wildlife|zoo|safari)\b/i;
+  if(photoWords.test(title+' '+desc))score+=20;
+
+  const documentWords=/\b(anatomy|contribution|revised description|description of|plate|plates|page|pages|book|volume|vol\.?|journal|proceedings|manuscript|scan|scanned|text|document|paper|article|catalogue|catalog|archive|map|diagram|chart|illustration|drawing|painting|engraving|lithograph|poster|cover|title page)\b/i;
+  if(documentWords.test(title+' '+desc))score-=100;
+
   return score;
 }
 function visualMatchScore(page,terms){
@@ -130,15 +152,16 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
     const scored=candidates.map((page,index)=>{
       const title=(page.title||'').replace(/^File:/,'').toLocaleLowerCase();
       const directName=scoreTerms.some(x=>title.includes(x.toLocaleLowerCase()));
-      return{page,index,score:(directIds.has(page.pageid)?80:0)+(directName?100:0)+visualMatchScore(page,scoreTerms)};
+      const photo=photoLikelihood(page);
+      return{page,index,photo,score:(directIds.has(page.pageid)?60:0)+(directName?90:0)+visualMatchScore(page,scoreTerms)+photo};
     });
-    scored.sort((a,b)=>b.score-a.score||a.index-b.index);
-    pages=scored.filter(x=>x.score>=80).slice(0,30).map(x=>x.page);
-    if(pages.length<20){
-      const used=new Set(pages.map(x=>x.pageid));
-      const extras=scored.filter(x=>!used.has(x.page.pageid)&&x.score>=40).slice(0,30-pages.length).map(x=>x.page);
-      pages.push(...extras);
-    }
+    scored.sort((a,b)=>b.score-a.score||b.photo-a.photo||a.index-b.index);
+
+    const photos=scored.filter(x=>x.photo>=25&&x.score>=90);
+    const acceptable=scored.filter(x=>x.photo>=0&&x.score>=80&&!photos.includes(x));
+    const chosen=[...photos];
+    if(chosen.length<30)chosen.push(...acceptable.slice(0,30-chosen.length));
+    pages=chosen.slice(0,30).map(x=>x.page);
   }else{
     pages=await commonsPages(term+' filetype:bitmap',30);
   }status.textContent=pages.length?t.found(pages.length):t.none;const licenseNames=new Set();for(const x of pages){const i=x.imageinfo?.[0],m=i?.extmetadata||{};if(!i)continue;const li=licenseInfo(m),title=x.title.replace(/^File:/,'');const artist=strip(m.Artist?.value)||t.unknown,credit=strip(m.Credit?.value)||t.see;licenseNames.add(li.raw);const card=document.createElement('article');card.className='card';card.dataset.license=li.raw;card.innerHTML=`<img loading="lazy" src="${esc(i.thumburl||i.url)}" alt="${esc(strip(m.ImageDescription?.value)||title)}"><div class="info"><div class="title" title="${esc(title)}">${esc(title)}</div><div class="meta">${esc(li.raw)}</div><div class="creator">${esc(t.creator)}: ${esc(artist)}</div><div class="actions"><a href="${esc(i.descriptionurl)}" target="_blank" rel="noopener">${esc(t.file)}</a><button class="download" type="button">${esc(t.download)}</button><button class="lic" type="button">${esc(t.license)}</button></div></div>`;card.querySelector('img').onclick=()=>openImage(i.url,title,li.raw,i.descriptionurl);card.querySelector('img').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openImage(i.url,title,li.raw,i.descriptionurl)}};card.querySelector('img').tabIndex=0;card.querySelector('img').setAttribute('role','button');card.querySelector('.download').onclick=()=>downloadImage(i.url,title);card.querySelector('.lic').onclick=()=>{
