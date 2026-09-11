@@ -8,10 +8,12 @@ interface Props {
   image: CommonsImage;
   language: Language;
   t(key: MessageKey): string;
+  isFavorite: boolean;
+  onToggleFavorite(): void;
   onClose(): void;
 }
 
-export function ImageModal({ image, language, t, onClose }: Props) {
+export function ImageModal({ image, language, t, isFavorite, onToggleFavorite, onClose }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
@@ -76,6 +78,7 @@ export function ImageModal({ image, language, t, onClose }: Props) {
         <p className="informational-note">{t('informationalOnly')}</p>
 
         <div className="modal-actions">
+          <button type="button" onClick={onToggleFavorite}>{t(isFavorite ? 'unfavorite' : 'favorite')}</button>
           <button type="button" onClick={handleDownload}>{t('downloadOriginal')}</button>
           <a href={image.sourcePageUrl} target="_blank" rel="noopener noreferrer">{t('openSource')}</a>
           {image.licenseUrl && <a href={image.licenseUrl} target="_blank" rel="noopener noreferrer">{t('openLicense')}</a>}
