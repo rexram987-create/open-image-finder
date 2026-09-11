@@ -31,7 +31,7 @@ export default function App() {
         <LanguageSwitcher language={language} t={t} onChange={setLanguage} />
       </header>
 
-      <SearchBar t={t} onSearch={search} disabled={state.loading} />
+      <SearchBar t={t} onSearch={search} />
       <LicenseFilters value={filters} t={t} onChange={updateFilters} />
       <StatusMessage
         loading={state.loading}
