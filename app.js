@@ -50,16 +50,22 @@ function applyLicenseFilter(){
   if(total)status.textContent=value?t.shown(visible,total):t.found(total);
 }
 licenseFilter.addEventListener('change',applyLicenseFilter);
-async function resolveCommonsCategory(term){
+async function resolveSearchEntity(term){
   try{
     const langCode=lang==='he'?'he':'en';
-    const s=new URLSearchParams({action:'wbsearchentities',search:term,language:langCode,uselang:langCode,limit:'1',format:'json',origin:'*'});
-    const sr=await fetch('https://www.wikidata.org/w/api.php?'+s),sd=await sr.json(),id=sd.search?.[0]?.id;
-    if(!id)return'';
-    const e=new URLSearchParams({action:'wbgetentities',ids:id,props:'claims',format:'json',origin:'*'});
+    const s=new URLSearchParams({action:'wbsearchentities',search:term,language:langCode,uselang:langCode,limit:'5',format:'json',origin:'*'});
+    const sr=await fetch('https://www.wikidata.org/w/api.php?'+s),sd=await sr.json();
+    const ids=(sd.search||[]).map(x=>x.id).filter(Boolean);
+    if(!ids.length)return{category:'',english:''};
+    const e=new URLSearchParams({action:'wbgetentities',ids:ids.join('|'),props:'claims|labels|descriptions',languages:'en|he',format:'json',origin:'*'});
     const er=await fetch('https://www.wikidata.org/w/api.php?'+e),ed=await er.json();
-    return ed.entities?.[id]?.claims?.P373?.[0]?.mainsnak?.datavalue?.value||'';
-  }catch{return''}
+    const entities=ids.map(id=>ed.entities?.[id]).filter(Boolean);
+    const best=entities.find(x=>x.claims?.P373?.[0]?.mainsnak?.datavalue?.value)||entities[0];
+    return{
+      category:best?.claims?.P373?.[0]?.mainsnak?.datavalue?.value||'',
+      english:best?.labels?.en?.value||''
+    };
+  }catch{return{category:'',english:''}}
 }
 async function commonsPages(searchText,limit=30){
   const p=new URLSearchParams({action:'query',generator:'search',gsrsearch:searchText,gsrnamespace:'6',gsrlimit:String(limit),prop:'imageinfo',iiprop:'url|extmetadata',iiurlwidth:'600',format:'json',origin:'*'});
@@ -81,14 +87,20 @@ function relevanceScore(page,term){
 async function search(){const term=q.value.trim();if(!term)return;const t=T[lang];results.innerHTML='';filters.hidden=true;licenseFilter.innerHTML='';status.textContent=t.searching;try{
   let pages=[];
   if($('#exactSearch').checked){
-    const category=await resolveCommonsCategory(term);
-    if(category)pages=await commonsPages(`incategory:"${category}" filetype:bitmap`,30);
+    const entity=await resolveSearchEntity(term);
+    if(entity.category)pages=await commonsPages(`incategory:"${entity.category}" filetype:bitmap`,30);
+    if(pages.length<30&&entity.english){
+      const english=await commonsPages(`"${entity.english.replace(/"/g,'')}" filetype:bitmap`,50);
+      const seen=new Set(pages.map(x=>x.pageid));
+      pages.push(...english.filter(x=>!seen.has(x.pageid)));
+    }
     if(pages.length<12){
       const fallback=await commonsPages(`"${term.replace(/"/g,'')}" filetype:bitmap`,50);
       const seen=new Set(pages.map(x=>x.pageid));
       pages.push(...fallback.filter(x=>!seen.has(x.pageid)));
     }
-    pages.sort((a,b)=>relevanceScore(b,term)-relevanceScore(a,term));
+    const scoreTerms=[term,entity.english].filter(Boolean);
+    pages.sort((a,b)=>Math.max(...scoreTerms.map(x=>relevanceScore(b,x)))-Math.max(...scoreTerms.map(x=>relevanceScore(a,x))));
     pages=pages.slice(0,30);
   }else{
     pages=await commonsPages(term+' filetype:bitmap',30);
