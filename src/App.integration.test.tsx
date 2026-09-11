@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
 
@@ -89,9 +89,10 @@ it('supports the primary bilingual, license, favorite, language, and unclear-lic
   expect(screen.getByRole('dialog')).toBeInTheDocument();
   expect(screen.getByText(/מותר להשתמש ולשנות/)).toBeInTheDocument();
 
-  fireEvent.click(screen.getByRole('button', { name: 'הוסף למועדפים' }));
-  expect(screen.getByRole('button', { name: 'הסר מהמועדפים' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'סגור' }));
+  const dialog = screen.getByRole('dialog');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'הוסף למועדפים' }));
+  expect(within(dialog).getByRole('button', { name: 'הסר מהמועדפים' })).toBeInTheDocument();
+  fireEvent.click(within(dialog).getAllByRole('button', { name: 'סגור' })[0]);
 
   fireEvent.click(screen.getByRole('button', { name: 'English' }));
   await waitFor(() => expect(document.documentElement.dir).toBe('ltr'));
