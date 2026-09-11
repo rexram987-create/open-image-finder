@@ -15,7 +15,7 @@ export function ImageGallery({ images, t, onSelect }: Props) {
     <section aria-labelledby="results-heading">
       <h2 id="results-heading">{t('results')} ({images.length})</h2>
       <div className="image-grid">
-        {images.map((image) => <ImageCard key={image.id} image={image} onSelect={onSelect} />)}
+        {images.map((image) => <ImageCard key={image.id} image={image} t={t} onSelect={onSelect} />)}
       </div>
     </section>
   );
