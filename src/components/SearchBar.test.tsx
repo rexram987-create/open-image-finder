@@ -1,8 +1,14 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
+import type { MessageKey } from '../i18n/messages';
 import { SearchBar } from './SearchBar';
 
-const t = (key: any) => ({ searchLabel: 'Search images', searchPlaceholder: 'Search', searchButton: 'Go' }[key] ?? key);
+const labels: Partial<Record<MessageKey, string>> = {
+  searchLabel: 'Search images',
+  searchPlaceholder: 'Search',
+  searchButton: 'Go',
+};
+const t = (key: MessageKey) => labels[key] ?? key;
 
 it('submits a trimmed query by keyboard/form submit', () => {
   const onSearch = vi.fn();
