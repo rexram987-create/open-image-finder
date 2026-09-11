@@ -7,6 +7,10 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        cleanupOutdatedCaches: true,
+        navigateFallback: 'index.html'
+      },
       manifest: {
         name: 'חיפוש תמונות חופשיות',
         short_name: 'Free Images',
