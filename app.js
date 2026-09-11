@@ -1,12 +1,63 @@
 const $=s=>document.querySelector(s),results=$('#results'),status=$('#status'),q=$('#q'),dlg=$('#licenseDialog'),body=$('#licenseBody'),imgDlg=$('#imageDialog'),imgPreview=$('#imagePreview'),imgStage=$('#imageStage');
 let lang=localStorage.getItem('oif-lang')||'he';
-const T={he:{tag:'חיפוש תמונות חופשיות ב־Wikimedia Commons',label:'מה תרצה למצוא?',ph:'לדוגמה: Tyrannosaurus rex',go:'חיפוש',switch:'English',found:n=>`נמצאו ${n} תוצאות`,none:'לא נמצאו תוצאות.',searching:'מחפש…',error:'אירעה שגיאה בחיפוש. נסה שוב.',file:'דף הקובץ',license:'הסבר רישיון',download:'הורדת תמונה',creator:'יוצר',credit:'קרדיט',unknown:'לא צוין',see:'ראו בדף הקובץ',original:'פתיחת דף הקובץ המקורי',notice:'המידע הוא תקציר נוח בלבד. התנאים המחייבים הם אלה המופיעים בדף הקובץ ב־Wikimedia Commons.',aria:'תוצאות חיפוש'},en:{tag:'Search freely licensed images on Wikimedia Commons',label:'What would you like to find?',ph:'Example: Tyrannosaurus rex',go:'Search',switch:'עברית',found:n=>`${n} results found`,none:'No results found.',searching:'Searching…',error:'Search failed. Please try again.',file:'File page',license:'License info',download:'Download image',creator:'Creator',credit:'Credit',unknown:'Not specified',see:'See file page',original:'Open original file page',notice:'This is a convenient summary only. The binding terms are those shown on the Wikimedia Commons file page.',aria:'Search results'}};
+const T={he:{tag:'חיפוש תמונות חופשיות ב־Wikimedia Commons',label:'מה תרצה למצוא?',ph:'לדוגמה: Tyrannosaurus rex',go:'חיפוש',switch:'English',found:n=>`נמצאו ${n} תוצאות`,none:'לא נמצאו תוצאות.',searching:'מחפש…',error:'אירעה שגיאה בחיפוש. נסה שוב.',file:'דף הקובץ',license:'הסבר רישיון',download:'הורדת תמונה',creator:'יוצר',credit:'קרדיט',unknown:'לא צוין',see:'ראו בדף הקובץ',original:'פתיחת דף הקובץ המקורי',notice:'המידע הוא תקציר נוח בלבד. התנאים המחייבים הם אלה המופיעים בדף הקובץ ב־Wikimedia Commons.',aria:'תוצאות חיפוש',simple:'מה מותר לעשות?',share:'להעתיק ולשתף',edit:'לערוך וליצור גרסאות',commercial:'שימוש מסחרי',attribution:'חובה לתת קרדיט',sameLicense:'יצירה נגזרת באותו רישיון',checkFile:'יש לבדוק בדף הקובץ',yes:'מותר',no:'לא ידוע',copyCredit:'העתקת קרדיט',copied:'הקרדיט הועתק',terms:'תנאים חשובים',licensePage:'דף הרישיון'},en:{tag:'Search freely licensed images on Wikimedia Commons',label:'What would you like to find?',ph:'Example: Tyrannosaurus rex',go:'Search',switch:'עברית',found:n=>`${n} results found`,none:'No results found.',searching:'Searching…',error:'Search failed. Please try again.',file:'File page',license:'License info',download:'Download image',creator:'Creator',credit:'Credit',unknown:'Not specified',see:'See file page',original:'Open original file page',notice:'This is a convenient summary only. The binding terms are those shown on the Wikimedia Commons file page.',aria:'Search results',simple:'What can I do with it?',share:'Copy and share',edit:'Edit and adapt',commercial:'Commercial use',attribution:'Attribution required',sameLicense:'Adaptations under same license',checkFile:'Check the file page',yes:'Allowed',no:'Unknown',copyCredit:'Copy credit',copied:'Credit copied',terms:'Important terms',licensePage:'License page'}};
 const strip=s=>(s||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();
-function licenseInfo(m){const raw=strip(m.LicenseShortName?.value||m.License?.value||T[lang].unknown);let he='יש לבדוק את תנאי הרישיון בדף הקובץ לפני שימוש.',en='Check the license terms on the file page before use.';if(/CC0|Public domain/i.test(raw)){he='בדרך כלל ניתן להשתמש ללא בקשת רשות; ייחוס עדיין מומלץ כשאפשר.';en='Generally reusable without permission; attribution is still recommended when practical.'}else if(/CC BY-SA/i.test(raw)){he='נדרש ייחוס ליוצר, וביצירה נגזרת יש להשתמש באותו רישיון.';en='Attribution is required, and adaptations must use the same license.'}else if(/CC BY/i.test(raw)){he='נדרש לתת קרדיט/ייחוס ליוצר בהתאם לתנאי הרישיון.';en='Attribution to the creator is required under the license terms.'}return{raw,note:lang==='he'?he:en}}
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function licenseInfo(m){
+  const raw=strip(m.LicenseShortName?.value||m.UsageTerms?.value||m.License?.value||T[lang].unknown);
+  const url=(m.LicenseUrl?.value||'').trim();
+  const l=raw.toLowerCase();
+  let share=null,edit=null,commercial=null,attribution=null,sameLicense=null;
+  let he='יש לבדוק את תנאי הרישיון בדף הקובץ לפני שימוש.',en='Check the license terms on the file page before use.';
+  if(/cc0|public domain|pd-old|pd-us|pd-art|pd-self/.test(l)){
+    share=edit=commercial=true;attribution=false;sameLicense=false;
+    he='התמונה מסומנת כנחלת הכלל או CC0. בדרך כלל מותר להעתיק, לערוך ולהשתמש גם מסחרית ללא בקשת רשות. מתן קרדיט עדיין מומלץ כשאפשר.';
+    en='The image is marked Public Domain or CC0. Copying, adapting and commercial use are generally allowed without permission. Credit is still recommended when practical.';
+  }else if(/cc by-sa|creative commons attribution-share alike|attribution-sharealike/.test(l)){
+    share=edit=commercial=true;attribution=true;sameLicense=true;
+    he='מותר להעתיק, לערוך ולהשתמש גם מסחרית, בתנאי שנותנים ייחוס מתאים ושומרים על אותו רישיון ביצירה נגזרת.';
+    en='Copying, adapting and commercial use are allowed, provided proper attribution is given and adaptations use the same license.';
+  }else if(/cc by(?!-sa)|creative commons attribution(?!-share)/.test(l)){
+    share=edit=commercial=true;attribution=true;sameLicense=false;
+    he='מותר להעתיק, לערוך ולהשתמש גם מסחרית, בתנאי שנותנים ייחוס מתאים ליוצר.';
+    en='Copying, adapting and commercial use are allowed, provided proper attribution is given.';
+  }else if(/gfdl|gnu free documentation/.test(l)){
+    share=edit=commercial=true;attribution=true;sameLicense=true;
+    he='בדרך כלל מותר להעתיק, לערוך ולהשתמש גם מסחרית, אך ל־GFDL יש דרישות ייחוס ושיתוף ברישיון זהה או תואם. מומלץ לבדוק את דף הקובץ.';
+    en='Copying, adapting and commercial use are generally allowed, but GFDL has attribution and share-alike requirements. Check the file page for the exact terms.';
+  }
+  return{raw,url,note:lang==='he'?he:en,share,edit,commercial,attribution,sameLicense};
+}
+function licenseBadge(label,value){
+  const t=T[lang],state=value===true?'ok':value===false?'neutral':'warn',text=value===true?t.yes:value===false?(lang==='he'?'לא נדרש':'Not required'):t.no;
+  return `<div class="license-row"><span>${esc(label)}</span><strong class="${state}">${esc(text)}</strong></div>`;
+}
 function applyLang(){const t=T[lang];document.documentElement.lang=lang;document.documentElement.dir=lang==='he'?'rtl':'ltr';$('#tagline').textContent=t.tag;$('#searchLabel').textContent=t.label;q.placeholder=t.ph;$('#go').textContent=t.go;$('#lang').textContent=t.switch;results.setAttribute('aria-label',t.aria);$('.close').setAttribute('aria-label',lang==='he'?'סגירה':'Close');$('.image-close').setAttribute('aria-label',lang==='he'?'סגירה':'Close');$('#zoomIn').setAttribute('aria-label',lang==='he'?'הגדלה':'Zoom in');$('#zoomOut').setAttribute('aria-label',lang==='he'?'הקטנה':'Zoom out');$('#zoomReset').setAttribute('aria-label',lang==='he'?'איפוס הגדלה':'Reset zoom');localStorage.setItem('oif-lang',lang)}
 $('#lang').onclick=()=>{lang=lang==='he'?'en':'he';applyLang();if(results.children.length)search()};
 async function downloadImage(url,title){try{const r=await fetch(url);if(!r.ok)throw 0;const blob=await r.blob(),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=title;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}catch{window.open(url,'_blank','noopener')}}
-async function search(){const term=q.value.trim();if(!term)return;const t=T[lang];results.innerHTML='';status.textContent=t.searching;const p=new URLSearchParams({action:'query',generator:'search',gsrsearch:term+' filetype:bitmap',gsrnamespace:'6',gsrlimit:'24',prop:'imageinfo',iiprop:'url|extmetadata',iiurlwidth:'600',format:'json',origin:'*'});try{const r=await fetch('https://commons.wikimedia.org/w/api.php?'+p),d=await r.json(),pages=Object.values(d.query?.pages||{});status.textContent=pages.length?t.found(pages.length):t.none;for(const x of pages){const i=x.imageinfo?.[0],m=i?.extmetadata||{};if(!i)continue;const li=licenseInfo(m),title=x.title.replace(/^File:/,'');const artist=strip(m.Artist?.value)||t.unknown,credit=strip(m.Credit?.value)||t.see;const card=document.createElement('article');card.className='card';card.innerHTML=`<img loading="lazy" src="${i.thumburl||i.url}" alt="${strip(m.ImageDescription?.value)||title}"><div class="info"><div class="title" title="${title.replace(/"/g,'&quot;')}">${title}</div><div class="meta">${li.raw}</div><div class="creator">${t.creator}: ${artist}</div><div class="actions"><a href="${i.descriptionurl}" target="_blank" rel="noopener">${t.file}</a><button class="download" type="button">${t.download}</button><button class="lic" type="button">${t.license}</button></div></div>`;card.querySelector('img').onclick=()=>openImage(i.url,title,li.raw,i.descriptionurl);card.querySelector('img').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openImage(i.url,title,li.raw,i.descriptionurl)}};card.querySelector('img').tabIndex=0;card.querySelector('img').setAttribute('role','button');card.querySelector('.download').onclick=()=>downloadImage(i.url,title);card.querySelector('.lic').onclick=()=>{body.innerHTML=`<h2>${t.license}: ${li.raw}</h2><p>${li.note}</p><p><strong>${t.creator}:</strong> ${artist}</p><p><strong>${t.credit}:</strong> ${credit}</p><p>${t.notice}</p><p><a href="${i.descriptionurl}" target="_blank" rel="noopener">${t.original}</a></p>`;dlg.showModal()};results.append(card)}}catch(e){status.textContent=t.error}}
+async function search(){const term=q.value.trim();if(!term)return;const t=T[lang];results.innerHTML='';status.textContent=t.searching;const p=new URLSearchParams({action:'query',generator:'search',gsrsearch:term+' filetype:bitmap',gsrnamespace:'6',gsrlimit:'24',prop:'imageinfo',iiprop:'url|extmetadata',iiurlwidth:'600',format:'json',origin:'*'});try{const r=await fetch('https://commons.wikimedia.org/w/api.php?'+p),d=await r.json(),pages=Object.values(d.query?.pages||{});status.textContent=pages.length?t.found(pages.length):t.none;for(const x of pages){const i=x.imageinfo?.[0],m=i?.extmetadata||{};if(!i)continue;const li=licenseInfo(m),title=x.title.replace(/^File:/,'');const artist=strip(m.Artist?.value)||t.unknown,credit=strip(m.Credit?.value)||t.see;const card=document.createElement('article');card.className='card';card.innerHTML=`<img loading="lazy" src="${esc(i.thumburl||i.url)}" alt="${esc(strip(m.ImageDescription?.value)||title)}"><div class="info"><div class="title" title="${esc(title)}">${esc(title)}</div><div class="meta">${esc(li.raw)}</div><div class="creator">${esc(t.creator)}: ${esc(artist)}</div><div class="actions"><a href="${esc(i.descriptionurl)}" target="_blank" rel="noopener">${esc(t.file)}</a><button class="download" type="button">${esc(t.download)}</button><button class="lic" type="button">${esc(t.license)}</button></div></div>`;card.querySelector('img').onclick=()=>openImage(i.url,title,li.raw,i.descriptionurl);card.querySelector('img').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openImage(i.url,title,li.raw,i.descriptionurl)}};card.querySelector('img').tabIndex=0;card.querySelector('img').setAttribute('role','button');card.querySelector('.download').onclick=()=>downloadImage(i.url,title);card.querySelector('.lic').onclick=()=>{
+  const licenseLink=li.url&&/^https?:\/\//i.test(li.url)?`<a href="${esc(li.url)}" target="_blank" rel="noopener">${esc(t.licensePage)}</a>`:'';
+  body.innerHTML=`<h2>${esc(t.license)}: ${esc(li.raw)}</h2>
+  <p class="license-note">${esc(li.note)}</p>
+  <h3>${esc(t.simple)}</h3>
+  <div class="license-grid">
+    ${licenseBadge(t.share,li.share)}
+    ${licenseBadge(t.edit,li.edit)}
+    ${licenseBadge(t.commercial,li.commercial)}
+  </div>
+  <h3>${esc(t.terms)}</h3>
+  <div class="license-grid">
+    ${licenseBadge(t.attribution,li.attribution)}
+    ${licenseBadge(t.sameLicense,li.sameLicense)}
+  </div>
+  <p><strong>${esc(t.creator)}:</strong> ${esc(artist)}</p>
+  <p><strong>${esc(t.credit)}:</strong> <span id="creditText">${esc(credit)}</span></p>
+  <button id="copyCredit" class="copy-credit" type="button">${esc(t.copyCredit)}</button>
+  <p class="license-links"><a href="${esc(i.descriptionurl)}" target="_blank" rel="noopener">${esc(t.original)}</a>${licenseLink?' · '+licenseLink:''}</p>
+  <p class="license-notice">${esc(t.notice)}</p>`;
+  dlg.showModal();
+  $('#copyCredit').onclick=async()=>{try{await navigator.clipboard.writeText(credit);$('#copyCredit').textContent=t.copied}catch{}};
+};results.append(card)}}catch(e){status.textContent=t.error}}
 $('#go').onclick=search;q.addEventListener('keydown',e=>{if(e.key==='Enter')search()});$('.close').onclick=()=>dlg.close();applyLang();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js');
 let imageZoom=1,pinchStartDistance=0,pinchStartZoom=1,currentImage={url:'',title:''};
 function setImageZoom(v){
