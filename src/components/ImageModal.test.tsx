@@ -13,7 +13,7 @@ const image = {
 
 it('is an accessible dialog and closes with Escape', () => {
   const onClose = vi.fn();
-  render(<ImageModal image={image} language="en" t={(key: any) => key} onClose={onClose} />);
+  render(<ImageModal image={image} language="en" t={(key: any) => key} isFavorite={false} onToggleFavorite={vi.fn()} onClose={onClose} />);
   expect(screen.getByRole('dialog')).toHaveAttribute('aria-modal', 'true');
   expect(screen.getByRole('button', { name: 'close' })).toHaveFocus();
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
