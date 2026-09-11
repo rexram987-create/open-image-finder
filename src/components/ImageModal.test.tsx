@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import type { CommonsImage } from '../types/image';
 import { ImageModal } from './ImageModal';
@@ -14,9 +14,10 @@ const image = {
 it('is an accessible dialog and closes with Escape', () => {
   const onClose = vi.fn();
   render(<ImageModal image={image} language="en" t={(key: any) => key} isFavorite={false} onToggleFavorite={vi.fn()} onClose={onClose} />);
-  expect(screen.getByRole('dialog')).toHaveAttribute('aria-modal', 'true');
-  expect(screen.getByRole('button', { name: 'close' })).toHaveFocus();
-  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+  const dialog = screen.getByRole('dialog');
+  expect(dialog).toHaveAttribute('aria-modal', 'true');
+  expect(within(dialog).getAllByRole('button', { name: 'close' })[0]).toHaveFocus();
+  fireEvent.keyDown(dialog, { key: 'Escape' });
   expect(onClose).toHaveBeenCalled();
   expect(screen.getByRole('link', { name: 'openSource' })).toHaveAttribute('rel', 'noopener noreferrer');
 });
