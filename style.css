@@ -13,3 +13,16 @@
 .image-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .image-actions a,.image-actions button{font:inherit;text-decoration:none;border-radius:10px;padding:10px 12px;background:#20334d;color:#e7f4ff;border:0;text-align:center;flex:1}
 @media(max-width:520px){.image-dialog{width:calc(100% - 10px);max-width:none;padding:10px}.image-stage{height:64vh}.image-toolbar{padding-inline:48px}.image-caption h2{font-size:.92rem}.image-actions{flex-direction:column}.image-actions a,.image-actions button{width:100%}}
+
+.license-note{font-size:1rem;line-height:1.6;color:#dbeafe}
+#licenseBody h3{margin:18px 0 8px;color:#bae6fd}
+.license-grid{display:grid;gap:8px;margin:8px 0 14px}
+.license-row{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:10px 12px;border:1px solid #2b415f;border-radius:12px;background:#0b1626}
+.license-row strong{white-space:nowrap}
+.license-row .ok{color:#86efac}
+.license-row .neutral{color:#cbd5e1}
+.license-row .warn{color:#fde68a}
+.copy-credit{margin:4px 0 8px;background:#20334d;color:#e7f4ff}
+.license-links{line-height:1.8}
+.license-notice{font-size:.85rem;color:#a9bad1;border-top:1px solid #2b415f;padding-top:12px}
+@media(max-width:520px){.license-row{align-items:flex-start}.license-row strong{white-space:normal;text-align:end}}
