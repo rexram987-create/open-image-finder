@@ -3,15 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultLicenseFilters } from '../types/search';
 import { useImageSearch } from './useImageSearch';
 
-const searchCommons = vi.fn();
-const resolveEquivalentQuery = vi.fn();
+const mocks = vi.hoisted(() => ({
+  searchCommons: vi.fn(),
+  resolveEquivalentQuery: vi.fn(),
+}));
 
 vi.mock('../lib/commonsClient', () => ({
   CommonsApiError: class CommonsApiError extends Error {},
-  searchCommons: (...args: unknown[]) => searchCommons(...args),
+  searchCommons: (...args: unknown[]) => mocks.searchCommons(...args),
 }));
 vi.mock('../lib/queryResolver', () => ({
-  resolveEquivalentQuery: (...args: unknown[]) => resolveEquivalentQuery(...args),
+  resolveEquivalentQuery: (...args: unknown[]) => mocks.resolveEquivalentQuery(...args),
 }));
 vi.mock('../lib/normalizeCommons', () => ({
   normalizeCommonsPage: (page: any) => page.normalized ?? null,
@@ -42,13 +44,13 @@ const normalized = (id: number) => ({
 
 describe('useImageSearch', () => {
   beforeEach(() => {
-    searchCommons.mockReset();
-    resolveEquivalentQuery.mockReset();
+    mocks.searchCommons.mockReset();
+    mocks.resolveEquivalentQuery.mockReset();
   });
 
   it('keeps primary results when equivalent resolution fails', async () => {
-    searchCommons.mockResolvedValueOnce([{ normalized: normalized(1) }]);
-    resolveEquivalentQuery.mockResolvedValue({ original: 'test', equivalent: null, sourceLanguage: 'en' });
+    mocks.searchCommons.mockResolvedValueOnce([{ normalized: normalized(1) }]);
+    mocks.resolveEquivalentQuery.mockResolvedValue({ original: 'test', equivalent: null, sourceLanguage: 'en' });
 
     const { result } = renderHook(() => useImageSearch(defaultLicenseFilters));
     await act(async () => result.current.search('test'));
@@ -58,10 +60,10 @@ describe('useImageSearch', () => {
   });
 
   it('merges and deduplicates equivalent results', async () => {
-    searchCommons
+    mocks.searchCommons
       .mockResolvedValueOnce([{ normalized: normalized(1) }])
       .mockResolvedValueOnce([{ normalized: normalized(1) }, { normalized: normalized(2) }]);
-    resolveEquivalentQuery.mockResolvedValue({ original: 'כריש', equivalent: 'shark', sourceLanguage: 'he' });
+    mocks.resolveEquivalentQuery.mockResolvedValue({ original: 'כריש', equivalent: 'shark', sourceLanguage: 'he' });
 
     const { result } = renderHook(() => useImageSearch(defaultLicenseFilters));
     await act(async () => result.current.search('כריש'));
