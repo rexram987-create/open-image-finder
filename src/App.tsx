@@ -8,6 +8,7 @@ import { RecentSearches } from './components/RecentSearches';
 import { SearchBar } from './components/SearchBar';
 import { StatusMessage } from './components/StatusMessage';
 import { useImageSearch } from './hooks/useImageSearch';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { useI18n } from './i18n/useI18n';
 import {
   loadFavorites,
@@ -26,6 +27,7 @@ export default function App() {
   const [recentSearches, setRecentSearches] = useState(loadRecentSearches);
   const [favorites, setFavorites] = useState(loadFavorites);
   const { state, search, retry } = useImageSearch(filters);
+  const online = useOnlineStatus();
 
   function updateFilters(next: LicenseFiltersValue) {
     setFilters(next);
@@ -33,6 +35,7 @@ export default function App() {
   }
 
   function runSearch(query: string) {
+    if (!online) return;
     void search(query);
     setRecentSearches(loadRecentSearches());
   }
@@ -53,7 +56,8 @@ export default function App() {
         <LanguageSwitcher language={language} t={t} onChange={setLanguage} />
       </header>
 
-      <SearchBar t={t} onSearch={runSearch} />
+      {!online && <p className="offline-banner" role="status">{t('offline')}</p>}
+      <SearchBar t={t} onSearch={runSearch} disabled={!online} />
       <LicenseFilters value={filters} t={t} onChange={updateFilters} />
       <StatusMessage
         loading={state.loading}
