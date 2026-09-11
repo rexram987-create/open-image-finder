@@ -26,3 +26,7 @@
 .license-links{line-height:1.8}
 .license-notice{font-size:.85rem;color:#a9bad1;border-top:1px solid #2b415f;padding-top:12px}
 @media(max-width:520px){.license-row{align-items:flex-start}.license-row strong{white-space:normal;text-align:end}}
+
+.license-version{margin:14px 0;padding:12px 14px;border:1px solid #31577e;border-radius:12px;background:#0b1d31}
+.license-version h3{margin:0 0 8px!important}
+.license-version p{margin:6px 0;line-height:1.55}
