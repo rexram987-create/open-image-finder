@@ -3,4 +3,23 @@
 <body><main><header><div class="topbar"><button id="lang" type="button" aria-label="Switch language">English</button></div><h1>Open Image Finder</h1><p id="tagline">חיפוש תמונות חופשיות ב־Wikimedia Commons</p></header>
 <section class="search"><label id="searchLabel" for="q">מה תרצה למצוא?</label><div><input id="q" type="search" placeholder="לדוגמה: Tyrannosaurus rex" autocomplete="off"><button id="go">חיפוש</button></div></section>
 <p id="status" role="status" aria-live="polite"></p><section id="results" class="grid" aria-label="תוצאות חיפוש"></section></main>
-<dialog id="licenseDialog"><button class="close" aria-label="סגירה">×</button><div id="licenseBody"></div></dialog><script src="app.js"></script></body></html>
+<dialog id="licenseDialog"><button class="close" aria-label="סגירה">×</button><div id="licenseBody"></div></dialog>
+<dialog id="imageDialog" class="image-dialog" aria-labelledby="imageTitle">
+  <button class="image-close" type="button" aria-label="סגירה">×</button>
+  <div class="image-toolbar" aria-label="בקרי הגדלה">
+    <button id="zoomOut" type="button" aria-label="הקטנה">−</button>
+    <button id="zoomReset" type="button" aria-label="איפוס הגדלה">100%</button>
+    <button id="zoomIn" type="button" aria-label="הגדלה">+</button>
+  </div>
+  <div id="imageStage" class="image-stage">
+    <img id="imagePreview" alt="">
+  </div>
+  <div class="image-caption">
+    <h2 id="imageTitle"></h2>
+    <p id="imageMeta"></p>
+    <div class="image-actions">
+      <a id="imageFileLink" target="_blank" rel="noopener"></a>
+      <button id="imageDownload" type="button"></button>
+    </div>
+  </div>
+</dialog><script src="app.js"></script></body></html>
