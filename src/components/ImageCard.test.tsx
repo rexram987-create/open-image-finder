@@ -10,7 +10,7 @@ it('renders license badge and title fallback alt text', () => {
     exactLicenseName: 'CC BY 4.0', normalizedLicenseGroup: 'cc-by', licenseUrl: null, attributionRequired: true,
     commercialUseAllowed: true, modificationAllowed: true, shareAlikeRequired: false, licenseConfidence: 'high',
   } as CommonsImage;
-  render(<ImageCard image={image} onSelect={vi.fn()} />);
+  render(<ImageCard image={image} t={(key: any) => key} onSelect={vi.fn()} />);
   expect(screen.getByRole('img', { name: 'Shark.jpg' })).toBeInTheDocument();
   expect(screen.getByText('CC BY 4.0')).toBeInTheDocument();
 });
