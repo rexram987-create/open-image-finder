@@ -68,6 +68,12 @@ async function resolveSearchEntity(term){
     };
   }catch{return{id:'',category:'',english:''}}
 }
+async function categoryFiles(category,limit=80){
+  if(!category)return[];
+  const p=new URLSearchParams({action:'query',generator:'categorymembers',gcmtitle:'Category:'+category,gcmtype:'file',gcmlimit:String(limit),prop:'imageinfo',iiprop:'url|extmetadata',iiurlwidth:'600',format:'json',origin:'*'});
+  const r=await fetch('https://commons.wikimedia.org/w/api.php?'+p),d=await r.json();
+  return Object.values(d.query?.pages||{});
+}
 async function commonsPages(searchText,limit=30){
   const p=new URLSearchParams({action:'query',generator:'search',gsrsearch:searchText,gsrnamespace:'6',gsrlimit:String(limit),prop:'imageinfo',iiprop:'url|extmetadata',iiurlwidth:'600',format:'json',origin:'*'});
   const r=await fetch('https://commons.wikimedia.org/w/api.php?'+p),d=await r.json();
@@ -113,27 +119,26 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
     const english=(entity.english||'').replace(/"/g,'').trim();
     const native=term.replace(/"/g,'').trim();
     const candidates=[];
-    const depicted=[];
-    if(entity.id){
-      try{
-        addUniquePages(depicted,await commonsPages(`haswbstatement:P180=${entity.id} filetype:bitmap`,50));
-      }catch{}
-    }
-    addUniquePages(candidates,depicted);
-    if(english)addUniquePages(candidates,await commonsPages(`intitle:"${english}" filetype:bitmap`,80));
-    if(native&&native.toLocaleLowerCase()!==english.toLocaleLowerCase())addUniquePages(candidates,await commonsPages(`intitle:"${native}" filetype:bitmap`,50));
-    if(english)addUniquePages(candidates,await commonsPages(`"${english}" filetype:bitmap`,80));
-    if(native)addUniquePages(candidates,await commonsPages(`"${native}" filetype:bitmap`,50));
-    if(entity.category)addUniquePages(candidates,await commonsPages(`incategory:"${entity.category}" filetype:bitmap`,80));
-    const depictedIds=new Set(depicted.map(x=>x.pageid));
+    const categoryDirect=await categoryFiles(entity.category,100);
+    addUniquePages(candidates,categoryDirect);
+    if(english)addUniquePages(candidates,await commonsPages(`intitle:"${english}" filetype:bitmap`,100));
+    if(native&&native.toLocaleLowerCase()!==english.toLocaleLowerCase())addUniquePages(candidates,await commonsPages(`intitle:"${native}" filetype:bitmap`,60));
+    if(english)addUniquePages(candidates,await commonsPages(`"${english}" filetype:bitmap`,100));
+    if(native)addUniquePages(candidates,await commonsPages(`"${native}" filetype:bitmap`,60));
+    const directIds=new Set(categoryDirect.map(x=>x.pageid));
     const scoreTerms=[term,entity.english].filter(Boolean);
-    const scored=candidates.map((page,index)=>({
-      page,index,
-      score:(depictedIds.has(page.pageid)?200:0)+visualMatchScore(page,scoreTerms)
-    }));
+    const scored=candidates.map((page,index)=>{
+      const title=(page.title||'').replace(/^File:/,'').toLocaleLowerCase();
+      const directName=scoreTerms.some(x=>title.includes(x.toLocaleLowerCase()));
+      return{page,index,score:(directIds.has(page.pageid)?80:0)+(directName?100:0)+visualMatchScore(page,scoreTerms)};
+    });
     scored.sort((a,b)=>b.score-a.score||a.index-b.index);
-    const strong=scored.filter(x=>x.score>=40);
-    pages=strong.slice(0,30).map(x=>x.page);
+    pages=scored.filter(x=>x.score>=80).slice(0,30).map(x=>x.page);
+    if(pages.length<20){
+      const used=new Set(pages.map(x=>x.pageid));
+      const extras=scored.filter(x=>!used.has(x.page.pageid)&&x.score>=40).slice(0,30-pages.length).map(x=>x.page);
+      pages.push(...extras);
+    }
   }else{
     pages=await commonsPages(term+' filetype:bitmap',30);
   }status.textContent=pages.length?t.found(pages.length):t.none;const licenseNames=new Set();for(const x of pages){const i=x.imageinfo?.[0],m=i?.extmetadata||{};if(!i)continue;const li=licenseInfo(m),title=x.title.replace(/^File:/,'');const artist=strip(m.Artist?.value)||t.unknown,credit=strip(m.Credit?.value)||t.see;licenseNames.add(li.raw);const card=document.createElement('article');card.className='card';card.dataset.license=li.raw;card.innerHTML=`<img loading="lazy" src="${esc(i.thumburl||i.url)}" alt="${esc(strip(m.ImageDescription?.value)||title)}"><div class="info"><div class="title" title="${esc(title)}">${esc(title)}</div><div class="meta">${esc(li.raw)}</div><div class="creator">${esc(t.creator)}: ${esc(artist)}</div><div class="actions"><a href="${esc(i.descriptionurl)}" target="_blank" rel="noopener">${esc(t.file)}</a><button class="download" type="button">${esc(t.download)}</button><button class="lic" type="button">${esc(t.license)}</button></div></div>`;card.querySelector('img').onclick=()=>openImage(i.url,title,li.raw,i.descriptionurl);card.querySelector('img').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openImage(i.url,title,li.raw,i.descriptionurl)}};card.querySelector('img').tabIndex=0;card.querySelector('img').setAttribute('role','button');card.querySelector('.download').onclick=()=>downloadImage(i.url,title);card.querySelector('.lic').onclick=()=>{
