@@ -79,9 +79,25 @@ function relevanceScore(page,term){
   const object=strip(m.ObjectName?.value).toLocaleLowerCase();
   let score=0;
   if(title===needle)score+=100;
-  if(title.includes(needle))score+=50;
-  if(object.includes(needle))score+=35;
-  if(desc.includes(needle))score+=25;
+  if(title.includes(needle))score+=60;
+  if(object.includes(needle))score+=45;
+  if(desc.includes(needle))score+=30;
+  return score;
+}
+function visualMatchScore(page,terms){
+  const m=page.imageinfo?.[0]?.extmetadata||{};
+  const title=(page.title||'').replace(/^File:/,'').toLocaleLowerCase();
+  const desc=strip(m.ImageDescription?.value).toLocaleLowerCase();
+  const object=strip(m.ObjectName?.value).toLocaleLowerCase();
+  const needles=terms.map(x=>x.toLocaleLowerCase()).filter(Boolean);
+  let score=0;
+  for(const n of needles){
+    if(title.includes(n))score=Math.max(score,60);
+    if(object.includes(n))score=Math.max(score,50);
+    if(desc.includes(n))score=Math.max(score,35);
+  }
+  const indirect=/\b(entrance|shelter|sign|map|diagram|chart|logo|statue|sculpture|museum|gate|road|street|habitat|scape|landscape|karyotype|chromosome|footprint|track|tracks|enclosure|zoo entrance)\b/i;
+  if(indirect.test(title))score-=45;
   return score;
 }
 async function search(){const term=q.value.trim();if(!term)return;const t=T[lang];results.innerHTML='';filters.hidden=true;licenseFilter.innerHTML='';status.textContent=t.searching;try{
@@ -100,8 +116,11 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
       pages.push(...fallback.filter(x=>!seen.has(x.pageid)));
     }
     const scoreTerms=[term,entity.english].filter(Boolean);
-    pages.sort((a,b)=>Math.max(...scoreTerms.map(x=>relevanceScore(b,x)))-Math.max(...scoreTerms.map(x=>relevanceScore(a,x))));
-    pages=pages.slice(0,30);
+    const scored=pages.map(page=>({page,score:visualMatchScore(page,scoreTerms)}));
+    let focused=scored.filter(x=>x.score>=30);
+    if(focused.length<12)focused=scored.filter(x=>x.score>0);
+    focused.sort((a,b)=>b.score-a.score||Math.max(...scoreTerms.map(x=>relevanceScore(b.page,x)))-Math.max(...scoreTerms.map(x=>relevanceScore(a.page,x))));
+    pages=focused.slice(0,30).map(x=>x.page);
   }else{
     pages=await commonsPages(term+' filetype:bitmap',30);
   }status.textContent=pages.length?t.found(pages.length):t.none;const licenseNames=new Set();for(const x of pages){const i=x.imageinfo?.[0],m=i?.extmetadata||{};if(!i)continue;const li=licenseInfo(m),title=x.title.replace(/^File:/,'');const artist=strip(m.Artist?.value)||t.unknown,credit=strip(m.Credit?.value)||t.see;licenseNames.add(li.raw);const card=document.createElement('article');card.className='card';card.dataset.license=li.raw;card.innerHTML=`<img loading="lazy" src="${esc(i.thumburl||i.url)}" alt="${esc(strip(m.ImageDescription?.value)||title)}"><div class="info"><div class="title" title="${esc(title)}">${esc(title)}</div><div class="meta">${esc(li.raw)}</div><div class="creator">${esc(t.creator)}: ${esc(artist)}</div><div class="actions"><a href="${esc(i.descriptionurl)}" target="_blank" rel="noopener">${esc(t.file)}</a><button class="download" type="button">${esc(t.download)}</button><button class="lic" type="button">${esc(t.license)}</button></div></div>`;card.querySelector('img').onclick=()=>openImage(i.url,title,li.raw,i.descriptionurl);card.querySelector('img').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openImage(i.url,title,li.raw,i.descriptionurl)}};card.querySelector('img').tabIndex=0;card.querySelector('img').setAttribute('role','button');card.querySelector('.download').onclick=()=>downloadImage(i.url,title);card.querySelector('.lic').onclick=()=>{
