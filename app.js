@@ -92,35 +92,38 @@ function visualMatchScore(page,terms){
   const needles=terms.map(x=>x.toLocaleLowerCase()).filter(Boolean);
   let score=0;
   for(const n of needles){
-    if(title.includes(n))score=Math.max(score,60);
-    if(object.includes(n))score=Math.max(score,50);
-    if(desc.includes(n))score=Math.max(score,35);
+    if(title===n||title.startsWith(n+' '))score=Math.max(score,100);
+    else if(title.includes(n))score=Math.max(score,80);
+    if(object.includes(n))score=Math.max(score,65);
+    if(desc.includes(n))score=Math.max(score,45);
   }
-  const indirect=/\b(entrance|shelter|sign|map|diagram|chart|logo|statue|sculpture|museum|gate|road|street|habitat|scape|landscape|karyotype|chromosome|footprint|track|tracks|enclosure|zoo entrance)\b/i;
-  if(indirect.test(title))score-=45;
+  const indirect=/\b(entrance|shelter|sign|map|diagram|chart|logo|statue|sculpture|museum|gate|road|street|habitat|scape|landscape|karyotype|chromosome|footprint|track|tracks|enclosure|temple|wall|walls|painting|drawing|illustration)\b/i;
+  if(indirect.test(title))score-=55;
   return score;
+}
+function addUniquePages(target,incoming){
+  const seen=new Set(target.map(x=>x.pageid));
+  for(const p of incoming)if(!seen.has(p.pageid)){seen.add(p.pageid);target.push(p)}
 }
 async function search(){const term=q.value.trim();if(!term)return;const t=T[lang];results.innerHTML='';filters.hidden=true;licenseFilter.innerHTML='';status.textContent=t.searching;try{
   let pages=[];
   if($('#exactSearch').checked){
     const entity=await resolveSearchEntity(term);
-    if(entity.category)pages=await commonsPages(`incategory:"${entity.category}" filetype:bitmap`,30);
-    if(pages.length<30&&entity.english){
-      const english=await commonsPages(`"${entity.english.replace(/"/g,'')}" filetype:bitmap`,50);
-      const seen=new Set(pages.map(x=>x.pageid));
-      pages.push(...english.filter(x=>!seen.has(x.pageid)));
-    }
-    if(pages.length<12){
-      const fallback=await commonsPages(`"${term.replace(/"/g,'')}" filetype:bitmap`,50);
-      const seen=new Set(pages.map(x=>x.pageid));
-      pages.push(...fallback.filter(x=>!seen.has(x.pageid)));
-    }
+    const english=(entity.english||'').replace(/"/g,'').trim();
+    const native=term.replace(/"/g,'').trim();
+    const candidates=[];
+    if(english)addUniquePages(candidates,await commonsPages(`intitle:"${english}" filetype:bitmap`,80));
+    if(native&&native.toLocaleLowerCase()!==english.toLocaleLowerCase())addUniquePages(candidates,await commonsPages(`intitle:"${native}" filetype:bitmap`,50));
+    if(english)addUniquePages(candidates,await commonsPages(`"${english}" filetype:bitmap`,100));
+    if(native)addUniquePages(candidates,await commonsPages(`"${native}" filetype:bitmap`,60));
+    if(entity.category)addUniquePages(candidates,await commonsPages(`incategory:"${entity.category}" filetype:bitmap`,100));
     const scoreTerms=[term,entity.english].filter(Boolean);
-    const scored=pages.map(page=>({page,score:visualMatchScore(page,scoreTerms)}));
-    let focused=scored.filter(x=>x.score>=30);
-    if(focused.length<12)focused=scored.filter(x=>x.score>0);
-    focused.sort((a,b)=>b.score-a.score||Math.max(...scoreTerms.map(x=>relevanceScore(b.page,x)))-Math.max(...scoreTerms.map(x=>relevanceScore(a.page,x))));
-    pages=focused.slice(0,30).map(x=>x.page);
+    const scored=candidates.map((page,index)=>({page,index,score:visualMatchScore(page,scoreTerms)}));
+    const direct=scored.filter(x=>x.score>=40).sort((a,b)=>b.score-a.score||a.index-b.index);
+    const related=scored.filter(x=>x.score>0&&x.score<40).sort((a,b)=>b.score-a.score||a.index-b.index);
+    const chosen=[...direct];
+    if(chosen.length<30)chosen.push(...related.slice(0,30-chosen.length));
+    pages=chosen.slice(0,30).map(x=>x.page);
   }else{
     pages=await commonsPages(term+' filetype:bitmap',30);
   }status.textContent=pages.length?t.found(pages.length):t.none;const licenseNames=new Set();for(const x of pages){const i=x.imageinfo?.[0],m=i?.extmetadata||{};if(!i)continue;const li=licenseInfo(m),title=x.title.replace(/^File:/,'');const artist=strip(m.Artist?.value)||t.unknown,credit=strip(m.Credit?.value)||t.see;licenseNames.add(li.raw);const card=document.createElement('article');card.className='card';card.dataset.license=li.raw;card.innerHTML=`<img loading="lazy" src="${esc(i.thumburl||i.url)}" alt="${esc(strip(m.ImageDescription?.value)||title)}"><div class="info"><div class="title" title="${esc(title)}">${esc(title)}</div><div class="meta">${esc(li.raw)}</div><div class="creator">${esc(t.creator)}: ${esc(artist)}</div><div class="actions"><a href="${esc(i.descriptionurl)}" target="_blank" rel="noopener">${esc(t.file)}</a><button class="download" type="button">${esc(t.download)}</button><button class="lic" type="button">${esc(t.license)}</button></div></div>`;card.querySelector('img').onclick=()=>openImage(i.url,title,li.raw,i.descriptionurl);card.querySelector('img').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openImage(i.url,title,li.raw,i.descriptionurl)}};card.querySelector('img').tabIndex=0;card.querySelector('img').setAttribute('role','button');card.querySelector('.download').onclick=()=>downloadImage(i.url,title);card.querySelector('.lic').onclick=()=>{
