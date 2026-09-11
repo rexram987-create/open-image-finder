@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ImageGallery } from './components/ImageGallery';
+import { ImageModal } from './components/ImageModal';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { LicenseFilters } from './components/LicenseFilters';
 import { SearchBar } from './components/SearchBar';
@@ -13,7 +14,7 @@ import type { LicenseFilters as LicenseFiltersValue } from './types/search';
 export default function App() {
   const { language, setLanguage, t } = useI18n();
   const [filters, setFilters] = useState<LicenseFiltersValue>(loadFilters);
-  const [, setSelectedImage] = useState<CommonsImage | null>(null);
+  const [selectedImage, setSelectedImage] = useState<CommonsImage | null>(null);
   const { state, search, retry } = useImageSearch(filters);
 
   function updateFilters(next: LicenseFiltersValue) {
@@ -42,6 +43,14 @@ export default function App() {
         onRetry={retry}
       />
       <ImageGallery images={state.images} t={t} onSelect={setSelectedImage} />
+      {selectedImage && (
+        <ImageModal
+          image={selectedImage}
+          language={language}
+          t={t}
+          onClose={() => setSelectedImage(null)}
+        />
+      )}
     </main>
   );
 }
