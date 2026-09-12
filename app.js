@@ -238,8 +238,15 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
       const directName=scoreTerms.some(x=>title.includes(x.toLocaleLowerCase()));
       const photo=photoLikelihood(page,allowArt);
       const representation=/\b(bust|busts|statue|statues|sculpture|sculptures|portrait|portraits|relief|reliefs|marble|bronze|coin|coins|medallion)\b/i.test(searchable);
-      const personRelevant=!allowArt||nameHit||representationDirect.some(x=>x.pageid===page.pageid);
-      return{page,index,photo,nameHit,representation,personRelevant,score:(directIds.has(page.pageid)?120:0)+(directName?100:0)+(nameHit?140:0)+visualMatchScore(page,scoreTerms,allowArt)+photo};
+      const representationCategory=representationDirect.some(x=>x.pageid===page.pageid);
+      const contextEvent=/\b(celebration|festival|parade|ceremony|commemoration|anniversary|crowd|gathering|procession|event|unveiling|dedication|memorial service|street scene|square|plaza)\b/i.test(title);
+      const subjectPattern=/\b(bust|statue|sculpture|portrait|relief|head|marble|bronze|coin|medallion)\b/i;
+      const titleLooksLikeRepresentation=directName&&subjectPattern.test(title)&&!contextEvent;
+      const personRelevant=!allowArt||titleLooksLikeRepresentation||representationCategory;
+      let subjectPenalty=0;
+      if(allowArt&&contextEvent)subjectPenalty-=220;
+      if(allowArt&&nameHit&&!titleLooksLikeRepresentation&&!representationCategory)subjectPenalty-=120;
+      return{page,index,photo,nameHit,representation,personRelevant,score:(directIds.has(page.pageid)?140:0)+(titleLooksLikeRepresentation?160:0)+(nameHit?70:0)+visualMatchScore(page,scoreTerms,allowArt)+photo+subjectPenalty};
     });
     scored.sort((a,b)=>b.score-a.score||b.photo-a.photo||a.index-b.index);
 
