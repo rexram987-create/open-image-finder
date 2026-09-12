@@ -243,12 +243,17 @@ async function smithsonianPages(term,limit=16,personMode=false){
     }
     const found=[],seen=new Set();
     const norm=s=>String(s||'').toLocaleLowerCase().replace(/^https?:\/\//,'').replace(/[?#].*$/,'').replace(/\s+/g,' ').trim();
+    const relevanceTerms=[term];
+    if(/joan of arc/i.test(term))relevanceTerms.push("jeanne d'arc","saint joan");
+    const relevantText=x=>[x.title,x.creator,x.url].filter(Boolean).join(' ').toLocaleLowerCase();
     for(const query of queries){
       const p=new URLSearchParams({q:query,rows:String(Math.max(limit*3,30))});
       const r=await fetch('/api/smithsonian?'+p.toString());
       if(!r.ok)continue;
       const d=await r.json();
       for(const x of (d.results||[])){
+        const text=relevantText(x);
+        if(personMode&&!relevanceTerms.some(t=>text.includes(t.toLocaleLowerCase())))continue;
         const keys=[
           'id:'+norm(x.id),
           'url:'+norm(x.url),
