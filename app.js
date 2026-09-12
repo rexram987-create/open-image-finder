@@ -221,6 +221,19 @@ async function locPages(term,limit=12,personMode=false){
     return (preferred.length?preferred:ranked).slice(0,limit).map(x=>x.page);
   }catch{return[]}
 }
+async function metPages(term,limit=10){
+  try{
+    const s=await fetch('https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q='+encodeURIComponent(term));
+    if(!s.ok)return[];
+    const d=await s.json(),ids=(d.objectIDs||[]).slice(0,Math.max(limit*3,24));
+    const objects=await Promise.all(ids.map(async id=>{try{const r=await fetch('https://collectionapi.metmuseum.org/public/collection/v1/objects/'+id);return r.ok?await r.json():null}catch{return null}}));
+    return objects.filter(x=>x&&x.primaryImageSmall&&x.isPublicDomain).slice(0,limit).map((x,n)=>({
+      pageid:'met-'+x.objectID,title:'File:'+(x.title||('The Met object '+x.objectID)),_source:'met',
+      imageinfo:[{url:x.primaryImage||x.primaryImageSmall,thumburl:x.primaryImageSmall,descriptionurl:x.objectURL,
+        extmetadata:{LicenseShortName:{value:'Public domain'},UsageTerms:{value:'Public domain'},Artist:{value:x.artistDisplayName||x.artistDisplayBio||'The Metropolitan Museum of Art'},Credit:{value:x.creditLine||'The Metropolitan Museum of Art'},ImageDescription:{value:[x.objectName,x.title,x.objectDate,x.medium].filter(Boolean).join(' · ')}}}]
+    }));
+  }catch{return[]}
+}
 function relevanceScore(page,term){
   const needle=term.toLocaleLowerCase(),m=page.imageinfo?.[0]?.extmetadata||{};
   const title=(page.title||'').replace(/^File:/,'').toLocaleLowerCase();
@@ -366,9 +379,9 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
       chosen=[...photos];
       if(chosen.length<30)chosen.push(...acceptable.slice(0,30-chosen.length));
     }
-    pages=chosen.slice(0,22).map(x=>x.page);pages.forEach(p=>p._source='commons');const loc=await locPages(entity.english||term,12,allowArt),mixed=[];for(let i=0;i<30&&mixed.length<30;i++){if(pages[i])mixed.push(pages[i]);if(loc[i])mixed.push(loc[i])}pages=mixed.slice(0,30);
+    pages=chosen.slice(0,20).map(x=>x.page);pages.forEach(p=>p._source='commons');const searchName=entity.english||term;const [loc,met]=await Promise.all([locPages(searchName,10,allowArt),metPages(searchName,10)]),mixed=[];for(let i=0;i<30&&mixed.length<30;i++){if(pages[i])mixed.push(pages[i]);if(loc[i])mixed.push(loc[i]);if(met[i])mixed.push(met[i])}pages=mixed.slice(0,30);
   }else{
-    const commons=await commonsPages(term+' filetype:bitmap',20);commons.forEach(p=>p._source='commons');const loc=await locPages(term,12);pages=[];for(let i=0;i<30&&pages.length<30;i++){if(commons[i])pages.push(commons[i]);if(loc[i])pages.push(loc[i])}
+    const commons=await commonsPages(term+' filetype:bitmap',18);commons.forEach(p=>p._source='commons');const [loc,met]=await Promise.all([locPages(term,10),metPages(term,10)]);pages=[];for(let i=0;i<30&&pages.length<30;i++){if(commons[i])pages.push(commons[i]);if(loc[i])pages.push(loc[i]);if(met[i])pages.push(met[i])}
   }status.textContent=pages.length?t.found(pages.length):t.none;const licenseNames=new Set();for(const x of pages){const i=x.imageinfo?.[0],m=i?.extmetadata||{};if(!i)continue;const li=licenseInfo(m),title=x.title.replace(/^File:/,'');const artist=strip(m.Artist?.value)||t.unknown,credit=strip(m.Credit?.value)||t.see;licenseNames.add(li.raw);const card=document.createElement('article');card.className='card';card.dataset.license=li.raw;card.dataset.source=x._source||'commons';card.innerHTML=`<img loading="lazy" src="${esc(i.thumburl||i.url)}" alt="${esc(strip(m.ImageDescription?.value)||title)}"><div class="info"><div class="title" title="${esc(title)}">${esc(title)}</div><div class="meta">${esc(li.raw)}</div><div class="creator">${esc(t.creator)}: ${esc(artist)}</div><div class="actions"><a href="${esc(i.descriptionurl)}" target="_blank" rel="noopener">${esc(t.file)}</a><button class="download" type="button">${esc(t.download)}</button><button class="lic" type="button">${esc(t.license)}</button></div></div>`;card.querySelector('img').onclick=()=>openImage(i.url,title,li.raw,i.descriptionurl);card.querySelector('img').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openImage(i.url,title,li.raw,i.descriptionurl)}};card.querySelector('img').tabIndex=0;card.querySelector('img').setAttribute('role','button');card.querySelector('.download').onclick=()=>downloadImage(i.url,title);card.querySelector('.lic').onclick=()=>{
   const licenseLink=li.url&&/^https?:\/\//i.test(li.url)?`<a href="${esc(li.url)}" target="_blank" rel="noopener">${esc(t.licensePage)}</a>`:'';
   const usage=strip(m.UsageTerms?.value||'');
