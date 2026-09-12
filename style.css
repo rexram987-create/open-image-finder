@@ -43,3 +43,5 @@
 .search-mode input{flex:0 0 auto;width:20px;height:20px;accent-color:#38bdf8}
 .search-mode p{margin:7px 29px 0 0;color:#a9bad1;font-size:.88rem;line-height:1.4}
 html[dir="ltr"] .search-mode p{margin:7px 0 0 29px}
+
+.license-row .blocked{color:#fca5a5}
