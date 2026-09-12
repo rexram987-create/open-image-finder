@@ -6,7 +6,8 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 function licenseInfo(m){
   const raw=strip(m.LicenseShortName?.value||m.UsageTerms?.value||m.License?.value||T[lang].unknown);
   const url=(m.LicenseUrl?.value||'').trim();
-  const l=(raw+' '+url).toLowerCase();
+  const usage=strip(m.UsageTerms?.value||'');
+  const l=(raw+' '+usage+' '+url).toLowerCase();
   const ccLike=/creative commons|\bcc\s*(?:by|0)|attribution|creativecommons\.org\/licenses/i.test(raw+' '+url);
   const versionMatch=ccLike?(raw.match(/(?:^|\s)([1-4](?:\.0|\.5)?)(?:\s|$|international)/i)||url.match(/\/licenses\/[^/]+\/([1-4](?:\.0|\.5)?)\/?/i)):null;
   const version=versionMatch?.[1]||'';
@@ -18,7 +19,15 @@ function licenseInfo(m){
   const isND=/by-nd|\/by-nd\/|attribution.noderiv/i.test(l);
   const isSA=/by-sa|\/by-sa\/|attribution.sharealike/i.test(l);
   const isBY=/\bcc\s*by\b|\/by\/|creative commons attribution/i.test(l);
-  if(/cc0|public domain|pd-old|pd-us|pd-art|pd-self/.test(l)){
+  if(/no known restrictions|no known copyright restrictions|free to use and reuse/.test(l)){
+    share=edit=commercial=true;attribution=false;sameLicense=false;
+    he='ספריית הקונגרס מציינת שאין מגבלות זכויות ידועות. בדרך כלל ניתן לשתף, לערוך ולהשתמש גם מסחרית, אך עדיין מומלץ לבדוק את דף הפריט ולתת קרדיט למקור.';
+    en='The Library of Congress indicates that there are no known copyright restrictions. Sharing, adaptation and commercial use are generally possible, but you should still check the item page and credit the source.';
+  }else if(/copyright restrictions may apply|rights status not evaluated|rights advisory|rights statement/.test(l)){
+    share=edit=commercial=null;attribution=null;sameLicense=null;
+    he='מידע הזכויות שסופק אינו מספיק כדי לקבוע בוודאות מה מותר לעשות. יש לבדוק את דף הפריט המקורי לפני שיתוף, עריכה או שימוש מסחרי.';
+    en='The supplied rights information is not enough to determine permitted uses with certainty. Check the original item page before sharing, adapting or commercial use.';
+  }else if(/cc0|public domain|pd-old|pd-us|pd-art|pd-self/.test(l)){
     share=edit=commercial=true;attribution=false;sameLicense=false;
     he='התמונה מסומנת כנחלת הכלל או CC0. בדרך כלל מותר להעתיק, לשתף, לשנות ולהשתמש גם מסחרית ללא בקשת רשות. מתן קרדיט עדיין מומלץ כשאפשר.';
     en='The image is marked Public Domain or CC0. Copying, sharing, adapting and commercial use are generally allowed without permission. Credit is still recommended when practical.';
@@ -364,7 +373,7 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
   const licenseLink=li.url&&/^https?:\/\//i.test(li.url)?`<a href="${esc(li.url)}" target="_blank" rel="noopener">${esc(t.licensePage)}</a>`:'';
   const usage=strip(m.UsageTerms?.value||'');
   const isLoc=x._source==='loc';
-  const locRights=isLoc?`<section class="license-version"><h3>${lang==='he'?'הצהרת הזכויות של Library of Congress':'Library of Congress rights statement'}</h3><p>${esc(usage|| (lang==='he'?'לא סופק נוסח זכויות מפורט לפריט זה.':'No detailed rights text was supplied for this item.'))}</p><p><strong>${lang==='he'?'מה זה אומר בפועל?':'What does this mean?'}</strong> ${li.share===true?(lang==='he'?'הפריט מסומן כך שניתן להשתמש בו בהתאם לתנאים המוצגים.':'The item is marked for use under the displayed terms.'):(lang==='he'?'לא ניתן לקבוע בוודאות מהמידע שסופק אם מותר לשתף, לערוך או להשתמש מסחרית. יש לבדוק את דף הפריט המקורי לפני שימוש.':'The supplied information is not enough to determine whether sharing, editing or commercial use is permitted. Check the original item page before use.')}</p></section>`:'';
+  const locRights=isLoc?`<section class="license-version"><h3>${lang==='he'?'מידע זכויות – Library of Congress':'Rights information – Library of Congress'}</h3><p>${esc(usage|| (lang==='he'?'לא סופק נוסח זכויות מפורט לפריט זה.':'No detailed rights text was supplied for this item.'))}</p></section>`:'';
   body.innerHTML=`<h2>${esc(t.license)}: ${esc(li.raw)}</h2>
   <p class="license-note">${esc(li.note)}</p>
   ${locRights}\n  ${li.version?`<section class="license-version"><h3>${esc(t.version)}: ${esc(li.version)}</h3><p><strong>${esc(t.versionMeaning)}</strong> ${esc(t.versionGeneric(li.version))}</p>${li.version==='4.0'?`<p>${esc(t.version40)}</p>`:''}</section>`:''}
