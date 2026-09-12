@@ -269,7 +269,7 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
       const documentScan=/\b(newspaper|newspapers|article|articles|page|pages|book|books|text|document|documents|manuscript|manuscripts|clipping|clippings|press|bulletin|journal|magazine|title page|front page|advertisement|advertisements)\b/i.test(searchable);
       const subjectPattern=/\b(bust|statue|sculpture|portrait|relief|head|marble|bronze|coin|medallion|engraving|etching|print|historical illustration)\b/i;
       const titleLooksLikeRepresentation=directName&&subjectPattern.test(title)&&!contextEvent;
-      const personRelevant=!allowArt||(!documentScan&&(titleLooksLikeRepresentation||representationCategory));
+      const personRelevant=!allowArt||(!documentScan&&!contextEvent&&(titleLooksLikeRepresentation||representationCategory));
       let subjectPenalty=0;
       if(allowArt&&contextEvent)subjectPenalty-=220;
       if(allowArt&&documentScan)subjectPenalty-=500;
@@ -284,18 +284,20 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
     let chosen=[];
     if(allowArt){
       const kinds=['sculpture','portrait','engraving','illustration'];
-      const buckets=Object.fromEntries(kinds.map(k=>[k,eligible.filter(x=>x.repKind===k)]));
-      const other=eligible.filter(x=>!kinds.includes(x.repKind));
-      for(let round=0;round<8&&chosen.length<30;round++){
+      const strict=eligible.filter(x=>kinds.includes(x.repKind));
+      const buckets=Object.fromEntries(kinds.map(k=>[k,strict.filter(x=>x.repKind===k)]));
+      // Diversify only among verified visual representations. Never pad with
+      // generic event/document/other results merely to reach 30.
+      for(let round=0;round<30&&chosen.length<30;round++){
+        let added=false;
         for(const kind of kinds){
           const item=buckets[kind][round];
-          if(item&&!chosen.includes(item))chosen.push(item);
+          if(item&&!chosen.includes(item)){
+            chosen.push(item);added=true;
+          }
           if(chosen.length>=30)break;
         }
-      }
-      for(const item of [...other,...eligible]){
-        if(chosen.length>=30)break;
-        if(!chosen.includes(item))chosen.push(item);
+        if(!added)break;
       }
     }else{
       const photos=eligible.filter(x=>x.photo>=35);
