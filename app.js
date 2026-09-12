@@ -54,7 +54,7 @@ function licenseInfo(m){
   return{raw,url,note:lang==='he'?he:en,share,edit,commercial,attribution,sameLicense,version};
 }
 function licenseBadge(label,value,mode='permission'){
-  const t=T[lang],state=value===true?'ok':value===false?'neutral':'warn',text=value===true?(mode==='requirement'?t.required:t.yes):value===false?t.notRequired:t.no;
+  const t=T[lang],state=value===true?'ok':value===false?(mode==='permission'?'blocked':'neutral'):'warn',text=value===true?(mode==='requirement'?t.required:t.yes):value===false?(mode==='permission'?t.disallowed:t.notRequired):t.no;
   return `<div class="license-row"><span>${esc(label)}</span><strong class="${state}">${esc(text)}</strong></div>`;
 }
 function applyLang(){const t=T[lang];document.documentElement.lang=lang;document.documentElement.dir=lang==='he'?'rtl':'ltr';$('#tagline').textContent=t.tag;$('#searchLabel').textContent=t.label;q.placeholder=t.ph;$('#go').textContent=t.go;$('#lang').textContent=t.switch;$('#licenseFilterLabel').textContent=t.filterLabel;$('#exactSearchLabel').textContent=t.exact;$('#exactSearchHint').textContent=t.exactHint;if(licenseFilter.options.length)licenseFilter.options[0].textContent=t.allLicenses;results.setAttribute('aria-label',t.aria);$('.close').setAttribute('aria-label',lang==='he'?'סגירה':'Close');$('.image-close').setAttribute('aria-label',lang==='he'?'סגירה':'Close');$('#zoomIn').setAttribute('aria-label',lang==='he'?'הגדלה':'Zoom in');$('#zoomOut').setAttribute('aria-label',lang==='he'?'הקטנה':'Zoom out');$('#zoomReset').setAttribute('aria-label',lang==='he'?'איפוס הגדלה':'Reset zoom');localStorage.setItem('oif-lang',lang)}
