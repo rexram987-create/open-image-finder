@@ -83,12 +83,17 @@ async function resolveSearchEntity(term){
     const er=await fetch('https://www.wikidata.org/w/api.php?'+e),ed=await er.json();
     const entities=ids.map(id=>ed.entities?.[id]).filter(Boolean);
     const best=entities.find(x=>x.claims?.P373?.[0]?.mainsnak?.datavalue?.value)||entities[0];
+    const instanceOf=(best?.claims?.P31||[]).map(c=>c?.mainsnak?.datavalue?.value?.id).filter(Boolean);
+    const occupation=(best?.claims?.P106||[]).map(c=>c?.mainsnak?.datavalue?.value?.id).filter(Boolean);
     return{
       id:best?.id||'',
       category:best?.claims?.P373?.[0]?.mainsnak?.datavalue?.value||'',
-      english:best?.labels?.en?.value||''
+      english:best?.labels?.en?.value||'',
+      description:best?.descriptions?.en?.value||best?.descriptions?.he?.value||'',
+      instanceOf,occupation,
+      isPerson:instanceOf.includes('Q5')
     };
-  }catch{return{id:'',category:'',english:''}}
+  }catch{return{id:'',category:'',english:'',description:'',instanceOf:[],occupation:[],isPerson:false}}
 }
 async function categoryFiles(category,limit=80){
   if(!category)return[];
@@ -113,7 +118,7 @@ function relevanceScore(page,term){
   if(desc.includes(needle))score+=30;
   return score;
 }
-function photoLikelihood(page){
+function photoLikelihood(page,allowArt=false){
   const i=page.imageinfo?.[0]||{},m=i.extmetadata||{},cm=i.commonmetadata||{};
   const title=(page.title||'').replace(/^File:/,'').toLocaleLowerCase();
   const desc=strip(m.ImageDescription?.value).toLocaleLowerCase();
@@ -137,10 +142,14 @@ function photoLikelihood(page){
 
   const nonPhoto=/\b(emblem|emblems|logo|logos|coat of arms|coats of arms|heraldry|heraldic|symbol|symbols|icon|icons|seal|seals|flag|flags|badge|badges|crest|crests|clipart|vector|svg|silhouette|cartoon|anatomy|plate|plates|page|pages|book|journal|manuscript|scan|scanned|text|document|paper|article|catalogue|catalog|archive|map|diagram|chart|illustration|drawing|painting|engraving|lithograph|poster|cover|title page)\b/i;
   if(nonPhoto.test(metaText))score-=180;
+  if(allowArt){
+    const historicalRepresentation=/\b(bust|busts|statue|statues|sculpture|sculptures|portrait|portraits|relief|coin|coins|medallion|marble|bronze)\b/i;
+    if(historicalRepresentation.test(metaText))score+=220;
+  }
 
   return score;
 }
-function visualMatchScore(page,terms){
+function visualMatchScore(page,terms,allowArt=false){
   const m=page.imageinfo?.[0]?.extmetadata||{};
   const title=(page.title||'').replace(/^File:/,'').toLocaleLowerCase();
   const desc=strip(m.ImageDescription?.value).toLocaleLowerCase();
@@ -153,8 +162,11 @@ function visualMatchScore(page,terms){
     if(object.includes(n))score=Math.max(score,65);
     if(desc.includes(n))score=Math.max(score,45);
   }
-  const indirect=/\b(entrance|shelter|sign|map|diagram|chart|logo|statue|sculpture|museum|gate|road|street|habitat|scape|landscape|karyotype|chromosome|footprint|track|tracks|enclosure|temple|wall|walls|painting|drawing|illustration)\b/i;
+  const indirect=allowArt
+    ?/\b(entrance|shelter|sign|map|diagram|chart|logo|museum|gate|road|street|habitat|scape|landscape|karyotype|chromosome|footprint|track|tracks|enclosure|temple|wall|walls)\b/i
+    :/\b(entrance|shelter|sign|map|diagram|chart|logo|statue|sculpture|museum|gate|road|street|habitat|scape|landscape|karyotype|chromosome|footprint|track|tracks|enclosure|temple|wall|walls|painting|drawing|illustration)\b/i;
   if(indirect.test(title))score-=55;
+  if(allowArt&&/\b(bust|statue|sculpture|portrait|relief|marble|bronze)\b/i.test(title))score+=80;
   return score;
 }
 function addUniquePages(target,incoming){
@@ -168,19 +180,25 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
     const english=(entity.english||'').replace(/"/g,'').trim();
     const native=term.replace(/"/g,'').trim();
     const candidates=[];
+    const allowArt=entity.isPerson;
     const categoryDirect=await categoryFiles(entity.category,100);
     addUniquePages(candidates,categoryDirect);
     if(english)addUniquePages(candidates,await commonsPages(`intitle:"${english}" filetype:bitmap`,100));
     if(native&&native.toLocaleLowerCase()!==english.toLocaleLowerCase())addUniquePages(candidates,await commonsPages(`intitle:"${native}" filetype:bitmap`,60));
     if(english)addUniquePages(candidates,await commonsPages(`"${english}" filetype:bitmap`,100));
     if(native)addUniquePages(candidates,await commonsPages(`"${native}" filetype:bitmap`,60));
+    if(allowArt&&english){
+      for(const kind of ['bust','statue','sculpture','portrait']){
+        addUniquePages(candidates,await commonsPages(`"${english}" ${kind} filetype:bitmap`,60));
+      }
+    }
     const directIds=new Set(categoryDirect.map(x=>x.pageid));
     const scoreTerms=[term,entity.english].filter(Boolean);
     const scored=candidates.map((page,index)=>{
       const title=(page.title||'').replace(/^File:/,'').toLocaleLowerCase();
       const directName=scoreTerms.some(x=>title.includes(x.toLocaleLowerCase()));
-      const photo=photoLikelihood(page);
-      return{page,index,photo,score:(directIds.has(page.pageid)?60:0)+(directName?90:0)+visualMatchScore(page,scoreTerms)+photo};
+      const photo=photoLikelihood(page,allowArt);
+      return{page,index,photo,score:(directIds.has(page.pageid)?60:0)+(directName?90:0)+visualMatchScore(page,scoreTerms,allowArt)+photo};
     });
     scored.sort((a,b)=>b.score-a.score||b.photo-a.photo||a.index-b.index);
 
