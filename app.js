@@ -96,20 +96,25 @@ function photoLikelihood(page){
   const title=(page.title||'').replace(/^File:/,'').toLocaleLowerCase();
   const desc=strip(m.ImageDescription?.value).toLocaleLowerCase();
   const mime=(i.mime||'').toLocaleLowerCase();
+  const metaText=[title,desc,strip(m.Categories?.value),strip(m.ObjectName?.value),strip(m.Credit?.value)].join(' ').toLocaleLowerCase();
   let score=0;
-  if(mime==='image/jpeg')score+=35;
-  else if(mime==='image/webp')score+=25;
-  else if(mime==='image/png')score+=10;
-  else if(mime.includes('tiff')||mime.includes('djvu')||mime.includes('pdf'))score-=80;
 
-  const cameraKeys=['Make','Model','DateTimeOriginal','ExposureTime','FNumber','ISOSpeedRatings','FocalLength'];
-  if(cameraKeys.some(k=>cm[k]||m[k]?.value))score+=70;
+  // File format alone is only a weak hint: drawings and emblems can also be JPEGs.
+  if(mime==='image/jpeg')score+=10;
+  else if(mime==='image/webp')score+=8;
+  else if(mime==='image/png')score+=2;
+  else if(mime.includes('tiff')||mime.includes('djvu')||mime.includes('pdf'))score-=90;
 
-  const photoWords=/\b(photo|photograph|photography|camera|taken|shot|wildlife|zoo|safari)\b/i;
-  if(photoWords.test(title+' '+desc))score+=20;
+  // Camera/EXIF metadata is much stronger evidence that the file is a photograph.
+  const cameraKeys=['Make','Model','DateTimeOriginal','ExposureTime','FNumber','ISOSpeedRatings','FocalLength','LensModel'];
+  const hasCamera=cameraKeys.some(k=>cm[k]||m[k]?.value);
+  if(hasCamera)score+=120;
 
-  const documentWords=/\b(anatomy|contribution|revised description|description of|plate|plates|page|pages|book|volume|vol\.?|journal|proceedings|manuscript|scan|scanned|text|document|paper|article|catalogue|catalog|archive|map|diagram|chart|illustration|drawing|painting|engraving|lithograph|poster|cover|title page)\b/i;
-  if(documentWords.test(title+' '+desc))score-=100;
+  const photoWords=/\b(photo|photograph|photography|camera|taken|shot|wildlife photography|zoo|safari)\b/i;
+  if(photoWords.test(metaText))score+=35;
+
+  const nonPhoto=/\b(emblem|emblems|logo|logos|coat of arms|coats of arms|heraldry|heraldic|symbol|symbols|icon|icons|seal|seals|flag|flags|badge|badges|crest|crests|clipart|vector|svg|silhouette|cartoon|anatomy|plate|plates|page|pages|book|journal|manuscript|scan|scanned|text|document|paper|article|catalogue|catalog|archive|map|diagram|chart|illustration|drawing|painting|engraving|lithograph|poster|cover|title page)\b/i;
+  if(nonPhoto.test(metaText))score-=180;
 
   return score;
 }
@@ -157,8 +162,8 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
     });
     scored.sort((a,b)=>b.score-a.score||b.photo-a.photo||a.index-b.index);
 
-    const photos=scored.filter(x=>x.photo>=25&&x.score>=90);
-    const acceptable=scored.filter(x=>x.photo>=0&&x.score>=80&&!photos.includes(x));
+    const photos=scored.filter(x=>x.photo>=35&&x.score>=90);
+    const acceptable=scored.filter(x=>x.photo>=10&&x.score>=90&&!photos.includes(x));
     const chosen=[...photos];
     if(chosen.length<30)chosen.push(...acceptable.slice(0,30-chosen.length));
     pages=chosen.slice(0,30).map(x=>x.page);
