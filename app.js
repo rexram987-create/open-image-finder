@@ -173,7 +173,7 @@ async function locPages(term,limit=12){
       const urls=Array.isArray(x.image_url)?x.image_url:[];
       const image=urls.find(u=>/^https?:/i.test(u||''));
       if(!image)continue;
-      out.push({source:'loc',title:strip(x.title||''),image,itemUrl:x.id||x.url||'',rights:strip(x.rights||x.rights_advisory||''),creator:strip(x.creator||'Library of Congress')});
+      out.push({pageid:'loc-'+out.length,title:'File:'+strip(x.title||''),_source:'loc',imageinfo:[{url:image,thumburl:image,descriptionurl:x.id||x.url||'https://www.loc.gov/pictures/',extmetadata:{LicenseShortName:{value:strip(x.rights||x.rights_advisory||'Rights information on item page')},Artist:{value:strip(x.creator||'Library of Congress')},Credit:{value:'Library of Congress'},ImageDescription:{value:strip(x.description||'')}}}]});
       if(out.length>=limit)break;
     }
     return out;
