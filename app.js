@@ -114,21 +114,46 @@ async function findCategories(searchText,limit=20){
 }
 async function personRepresentationFiles(name){
   if(!name)return[];
-  const kinds=['bust','busts','statue','statues','sculpture','sculptures','portrait','portraits','engraving','engravings','etching','etchings','print','prints','historical illustration','historical illustrations'];
+  const groups=[
+    ['bust','busts','statue','statues','sculpture','sculptures','relief','reliefs'],
+    ['portrait','portraits'],
+    ['engraving','engravings','etching','etchings','print','prints'],
+    ['historical illustration','historical illustrations']
+  ];
+  const buckets=[];
+  for(const kinds of groups){
+    const bucket=[];
+    for(const kind of kinds){
+      const cats=await findCategories(`"${name}" ${kind}`,10);
+      for(const cat of cats){
+        const lc=cat.toLocaleLowerCase(),n=name.toLocaleLowerCase();
+        if(!lc.includes(n))continue;
+        if(!/bust|statue|sculpture|portrait|head|relief|engraving|etching|print|illustration/i.test(cat))continue;
+        addUniquePages(bucket,await categoryFiles(cat,40));
+        const subs=await categorySubcategories(cat,12);
+        for(const sub of subs.slice(0,5))addUniquePages(bucket,await categoryFiles(sub,25));
+        if(bucket.length>=35)break;
+      }
+      if(bucket.length>=35)break;
+    }
+    buckets.push(bucket.slice(0,35));
+  }
   const found=[];
-  for(const kind of kinds){
-    const cats=await findCategories(`"${name}" ${kind}`,12);
-    for(const cat of cats){
-      const lc=cat.toLocaleLowerCase(),n=name.toLocaleLowerCase();
-      if(!lc.includes(n))continue;
-      if(!/bust|statue|sculpture|portrait|head|relief|engraving|etching|print|illustration/i.test(cat))continue;
-      addUniquePages(found,await categoryFiles(cat,60));
-      const subs=await categorySubcategories(cat,20);
-      for(const sub of subs.slice(0,8))addUniquePages(found,await categoryFiles(sub,40));
-      if(found.length>=80)return found;
+  for(let i=0;i<35;i++){
+    for(const bucket of buckets){
+      if(bucket[i])addUniquePages(found,[bucket[i]]);
+      if(found.length>=100)return found;
     }
   }
   return found;
+}
+function representationKind(text){
+  const s=(text||'').toLocaleLowerCase();
+  if(/\b(engraving|engravings|engraved|etching|etchings|print|prints)\b/i.test(s))return'engraving';
+  if(/\b(portrait|portraits|painting|paintings)\b/i.test(s))return'portrait';
+  if(/\b(illustration|illustrations|drawing|drawings)\b/i.test(s))return'illustration';
+  if(/\b(bust|busts|statue|statues|sculpture|sculptures|relief|reliefs|marble|bronze)\b/i.test(s))return'sculpture';
+  return'other';
 }
 async function commonsPages(searchText,limit=30){
   const p=new URLSearchParams({action:'query',generator:'search',gsrsearch:searchText,gsrnamespace:'6',gsrlimit:String(limit),prop:'imageinfo',iiprop:'url|mime|mediatype|commonmetadata|extmetadata',iiurlwidth:'600',format:'json',origin:'*'});
@@ -238,6 +263,7 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
       const directName=scoreTerms.some(x=>title.includes(x.toLocaleLowerCase()));
       const photo=photoLikelihood(page,allowArt);
       const representation=/\b(bust|busts|statue|statues|sculpture|sculptures|portrait|portraits|relief|reliefs|marble|bronze|coin|coins|medallion|engraving|engravings|engraved|etching|etchings|print|prints|historical illustration|historical illustrations)\b/i.test(searchable);
+      const repKind=representationKind(searchable);
       const representationCategory=representationDirect.some(x=>x.pageid===page.pageid);
       const contextEvent=/\b(celebration|festival|parade|ceremony|commemoration|anniversary|crowd|gathering|procession|event|unveiling|dedication|memorial service|street scene|square|plaza)\b/i.test(title);
       const documentScan=/\b(newspaper|newspapers|article|articles|page|pages|book|books|text|document|documents|manuscript|manuscripts|clipping|clippings|press|bulletin|journal|magazine|title page|front page|advertisement|advertisements)\b/i.test(searchable);
@@ -248,17 +274,35 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
       if(allowArt&&contextEvent)subjectPenalty-=220;
       if(allowArt&&documentScan)subjectPenalty-=500;
       if(allowArt&&nameHit&&!titleLooksLikeRepresentation&&!representationCategory)subjectPenalty-=120;
-      return{page,index,photo,nameHit,representation,personRelevant,score:(directIds.has(page.pageid)?140:0)+(titleLooksLikeRepresentation?160:0)+(nameHit?70:0)+visualMatchScore(page,scoreTerms,allowArt)+photo+subjectPenalty};
+      return{page,index,photo,nameHit,representation,repKind,personRelevant,score:(directIds.has(page.pageid)?140:0)+(titleLooksLikeRepresentation?160:0)+(nameHit?70:0)+visualMatchScore(page,scoreTerms,allowArt)+photo+subjectPenalty};
     });
     scored.sort((a,b)=>b.score-a.score||b.photo-a.photo||a.index-b.index);
 
     // For people, a statue/bust/portrait must also identify the searched person.
     // This prevents unrelated Roman statues from entering merely because "statue" matched.
-    const eligible=scored.filter(x=>x.personRelevant);
-    const photos=eligible.filter(x=>x.photo>=35&&x.score>=90);
-    const acceptable=eligible.filter(x=>x.photo>=10&&x.score>=90&&!photos.includes(x));
-    const chosen=[...photos];
-    if(chosen.length<30)chosen.push(...acceptable.slice(0,30-chosen.length));
+    const eligible=scored.filter(x=>x.personRelevant&&x.score>=90);
+    let chosen=[];
+    if(allowArt){
+      const kinds=['sculpture','portrait','engraving','illustration'];
+      const buckets=Object.fromEntries(kinds.map(k=>[k,eligible.filter(x=>x.repKind===k)]));
+      const other=eligible.filter(x=>!kinds.includes(x.repKind));
+      for(let round=0;round<8&&chosen.length<30;round++){
+        for(const kind of kinds){
+          const item=buckets[kind][round];
+          if(item&&!chosen.includes(item))chosen.push(item);
+          if(chosen.length>=30)break;
+        }
+      }
+      for(const item of [...other,...eligible]){
+        if(chosen.length>=30)break;
+        if(!chosen.includes(item))chosen.push(item);
+      }
+    }else{
+      const photos=eligible.filter(x=>x.photo>=35);
+      const acceptable=eligible.filter(x=>x.photo>=10&&!photos.includes(x));
+      chosen=[...photos];
+      if(chosen.length<30)chosen.push(...acceptable.slice(0,30-chosen.length));
+    }
     pages=chosen.slice(0,30).map(x=>x.page);
   }else{
     pages=await commonsPages(term+' filetype:bitmap',30);
