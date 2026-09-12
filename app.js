@@ -182,7 +182,12 @@ async function locPages(term,limit=12,personMode=false){
       if(personMode&&wanted.test(text))score+=100;
       if(title.toLocaleLowerCase().includes(term.toLocaleLowerCase()))score+=40;
       const itemUrl=x.links?.item||x.link||x.id||'https://www.loc.gov/pictures/';
-      const rights=strip(x.restriction||x.rights||'ראו בדף הפריט');
+      const rightsText=strip(x.restriction||x.rights||x.rights_advisory||'');
+      const rightsLower=rightsText.toLowerCase();
+      let rights='Rights statement';
+      if(/no known restrictions|no known copyright restrictions|public domain|free to use and reuse/.test(rightsLower))rights='Public domain / No known restrictions';
+      else if(/cc0|creative commons zero/.test(rightsLower))rights='CC0';
+      else if(/creative commons|\bcc\s*by/.test(rightsLower))rights=rightsText;
       const creator=strip(x.creator||x.created_published_date||'Library of Congress');
       ranked.push({score,page:{
         pageid:'loc-'+ranked.length,
@@ -194,6 +199,7 @@ async function locPages(term,limit=12,personMode=false){
           descriptionurl:itemUrl.replace(/^http:/,'https:'),
           extmetadata:{
             LicenseShortName:{value:rights},
+            UsageTerms:{value:rightsText||rights},
             Artist:{value:creator},
             Credit:{value:'Library of Congress'},
             ImageDescription:{value:summary}
