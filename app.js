@@ -236,60 +236,38 @@ async function metPages(term,limit=10){
 }
 async function smithsonianPages(term,limit=16,personMode=false){
   try{
-    const queries=[term];
-    if(personMode){
-      queries.push(term+' portrait',term+' painting',term+' engraving',term+' print',term+' sculpture');
-      if(/joan of arc/i.test(term))queries.push("Jeanne d'Arc","Saint Joan");
-    }
-    const found=[],seen=new Set();
-    const norm=s=>String(s||'').toLocaleLowerCase().replace(/^https?:\/\//,'').replace(/[?#].*$/,'').replace(/\s+/g,' ').trim();
-    const relevanceTerms=[term];
-    if(/joan of arc/i.test(term))relevanceTerms.push("jeanne d'arc","saint joan");
-    const relevantText=x=>[x.title,x.creator,x.url,x.indexText].filter(Boolean).join(' ').toLocaleLowerCase();
+    const joan=/^(joan of arc|jeanne d['’]arc|saint joan|st\.? joan of arc)$/i.test(term.trim());
+    const aliases=joan?["Joan of Arc","Jeanne d'Arc","St. Joan of Arc","Saint Joan of Arc"]:[term];
+    const queries=[...aliases];
+    if(personMode)for(const a of aliases)for(const kind of ['portrait','painting','engraving','print','sculpture'])queries.push(a+' '+kind);
+    const found=[],seen=new Set(),norm=s=>String(s||'').toLocaleLowerCase().replace(/^https?:\/\//,'').replace(/[?#].*$/,'').replace(/\s+/g,' ').trim();
+    const names=(joan?["joan of arc","jeanne d'arc","jeanne d’arc","saint joan","st. joan of arc","st joan of arc"]:[term]).map(norm);
+    const artWords=['portrait','painting','engraving','print','sculpture','statue','drawing','etching','lithograph','medal'];
     for(const query of queries){
-      const p=new URLSearchParams({q:query,rows:String(Math.max(limit*3,30))});
-      const r=await fetch('/api/smithsonian?'+p.toString());
-      if(!r.ok)continue;
-      const d=await r.json();
+      const p=new URLSearchParams({q:query,rows:String(Math.max(limit*4,50))}),r=await fetch('/api/smithsonian?'+p);
+      if(!r.ok)continue; const d=await r.json();
       for(const x of (d.results||[])){
-        const text=relevantText(x);
-        if(personMode&&!relevanceTerms.some(t=>text.includes(t.toLocaleLowerCase())))continue;
-        const keys=[
-          'id:'+norm(x.id),
-          'url:'+norm(x.url),
-          'img:'+norm(x.image),
-          'thumb:'+norm(x.thumbnail),
-          'title:'+norm(x.title)+'|creator:'+norm(x.creator)
-        ].filter(k=>!/:$/.test(k));
-        if(keys.some(k=>seen.has(k)))continue;
-        keys.forEach(k=>seen.add(k));
-        const image=String(x.image||'').replace(/^http:/,'https:');
-        const thumbnail=String(x.thumbnail||x.image||'').replace(/^http:/,'https:');
+        const title=norm(x.title),meta=norm(x.indexText),creator=norm(x.creator),url=norm(x.url);
+        let score=0;
+        if(names.some(n=>title.includes(n)))score+=100;
+        if(names.some(n=>meta.includes(n)))score+=35;
+        if(names.some(n=>creator.includes(n)))score+=10;
+        if(names.some(n=>url.includes(n)))score+=10;
+        if(artWords.some(w=>title.includes(w)))score+=20;
+        if(artWords.some(w=>meta.includes(w)))score+=5;
+        if(personMode&&score<35)continue;
+        const keys=['id:'+norm(x.id),'url:'+url,'img:'+norm(x.image),'thumb:'+norm(x.thumbnail),'title:'+title+'|creator:'+creator].filter(k=>!/:$/.test(k));
+        if(keys.some(k=>seen.has(k)))continue; keys.forEach(k=>seen.add(k));
+        const image=String(x.image||'').replace(/^http:/,'https:'),thumbnail=String(x.thumbnail||x.image||'').replace(/^http:/,'https:');
         if(!image&&!thumbnail)continue;
-        found.push({
-          pageid:'smithsonian-'+(x.id||found.length),
-          title:'File:'+(x.title||'Smithsonian item'),
-          _source:'smithsonian',
-          imageinfo:[{
-            url:image||thumbnail,
-            thumburl:thumbnail||image,
-            descriptionurl:x.url||'https://www.si.edu/openaccess',
-            extmetadata:{
-              LicenseShortName:{value:x.license||'CC0'},
-              UsageTerms:{value:x.license||'CC0'},
-              Artist:{value:x.creator||'Smithsonian Institution'},
-              Credit:{value:'Smithsonian Open Access'},
-              ImageDescription:{value:x.title||''}
-            }
-          }]
-        });
-        if(found.length>=limit)break;
+        found.push({score,pageid:'smithsonian-'+(x.id||found.length),title:'File:'+(x.title||'Smithsonian item'),_source:'smithsonian',imageinfo:[{url:image||thumbnail,thumburl:thumbnail||image,descriptionurl:x.url||'https://www.si.edu/openaccess',extmetadata:{LicenseShortName:{value:x.license||'CC0'},UsageTerms:{value:x.license||'CC0'},Artist:{value:x.creator||'Smithsonian Institution'},Credit:{value:'Smithsonian Open Access'},ImageDescription:{value:x.title||''}}}]});
       }
-      if(found.length>=limit)break;
     }
+    found.sort((a,b)=>b.score-a.score);
     return found.slice(0,limit);
   }catch{return[]}
 }
+
 function relevanceScore(page,term){
   const needle=term.toLocaleLowerCase(),m=page.imageinfo?.[0]?.extmetadata||{};
   const title=(page.title||'').replace(/^File:/,'').toLocaleLowerCase();
