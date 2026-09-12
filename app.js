@@ -196,14 +196,25 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
     const scoreTerms=[term,entity.english].filter(Boolean);
     const scored=candidates.map((page,index)=>{
       const title=(page.title||'').replace(/^File:/,'').toLocaleLowerCase();
+      const m=page.imageinfo?.[0]?.extmetadata||{};
+      const searchable=[title,strip(m.ObjectName?.value),strip(m.ImageDescription?.value),strip(m.Categories?.value)].join(' ').toLocaleLowerCase();
+      const nameHit=scoreTerms.some(x=>{
+        const q=x.toLocaleLowerCase().trim();
+        return q&&searchable.includes(q);
+      });
       const directName=scoreTerms.some(x=>title.includes(x.toLocaleLowerCase()));
       const photo=photoLikelihood(page,allowArt);
-      return{page,index,photo,score:(directIds.has(page.pageid)?60:0)+(directName?90:0)+visualMatchScore(page,scoreTerms,allowArt)+photo};
+      const representation=/\b(bust|busts|statue|statues|sculpture|sculptures|portrait|portraits|relief|reliefs|marble|bronze|coin|coins|medallion)\b/i.test(searchable);
+      const personRelevant=!allowArt||nameHit||directIds.has(page.pageid);
+      return{page,index,photo,nameHit,representation,personRelevant,score:(directIds.has(page.pageid)?80:0)+(directName?100:0)+(nameHit?120:0)+visualMatchScore(page,scoreTerms,allowArt)+photo};
     });
     scored.sort((a,b)=>b.score-a.score||b.photo-a.photo||a.index-b.index);
 
-    const photos=scored.filter(x=>x.photo>=35&&x.score>=90);
-    const acceptable=scored.filter(x=>x.photo>=10&&x.score>=90&&!photos.includes(x));
+    // For people, a statue/bust/portrait must also identify the searched person.
+    // This prevents unrelated Roman statues from entering merely because "statue" matched.
+    const eligible=scored.filter(x=>x.personRelevant);
+    const photos=eligible.filter(x=>x.photo>=35&&x.score>=90);
+    const acceptable=eligible.filter(x=>x.photo>=10&&x.score>=90&&!photos.includes(x));
     const chosen=[...photos];
     if(chosen.length<30)chosen.push(...acceptable.slice(0,30-chosen.length));
     pages=chosen.slice(0,30).map(x=>x.page);
