@@ -166,7 +166,7 @@ async function commonsPages(searchText,limit=30){
 async function locPages(term,limit=12){
   try{
     const q=new URLSearchParams({q:term,fo:'json',c:String(limit),at:'results'});
-    const r=await fetch('https://www.loc.gov/pictures/search/?'+q.toString());
+    const r=await fetch('/api/loc?'+q.toString());
     if(!r.ok)return[];
     const d=await r.json(),out=[];
     for(const x of (d.results||[])){
