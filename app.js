@@ -163,6 +163,22 @@ async function commonsPages(searchText,limit=30){
   const r=await fetch('https://commons.wikimedia.org/w/api.php?'+p),d=await r.json();
   return Object.values(d.query?.pages||{});
 }
+async function locPages(term,limit=12){
+  try{
+    const q=new URLSearchParams({q:term,fo:'json',c:String(limit)});
+    const r=await fetch('https://www.loc.gov/photos/?'+q.toString());
+    if(!r.ok)return[];
+    const d=await r.json(),out=[];
+    for(const x of (d.results||[])){
+      const urls=Array.isArray(x.image_url)?x.image_url:[];
+      const image=urls.find(u=>/^https?:/i.test(u||''));
+      if(!image)continue;
+      out.push({source:'loc',title:strip(x.title||''),image,itemUrl:x.id||x.url||'',rights:strip(x.rights||x.rights_advisory||''),creator:strip(x.creator||'Library of Congress')});
+      if(out.length>=limit)break;
+    }
+    return out;
+  }catch{return[]}
+}
 function relevanceScore(page,term){
   const needle=term.toLocaleLowerCase(),m=page.imageinfo?.[0]?.extmetadata||{};
   const title=(page.title||'').replace(/^File:/,'').toLocaleLowerCase();
