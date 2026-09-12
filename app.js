@@ -234,55 +234,29 @@ async function metPages(term,limit=10){
     }));
   }catch{return[]}
 }
-async function aicPages(term,limit=8){
+async function smithsonianPages(term,limit=8){
   try{
-    const p=new URLSearchParams();
-    p.set('q',term);
-    p.set('limit',String(Math.max(limit*2,16)));
-    p.set('fields','id,title,image_id,artist_display,date_display,medium_display,credit_line,is_public_domain');
-    p.set('query[term][is_public_domain]','true');
-    const r=await fetch('https://api.artic.edu/api/v1/artworks/search?'+p.toString());
+    const p=new URLSearchParams({q:term,rows:String(Math.max(limit*2,16))});
+    const r=await fetch('/api/smithsonian?'+p.toString());
     if(!r.ok)return[];
     const d=await r.json();
-    const selected=(d.data||[]).filter(x=>x&&x.image_id&&x.is_public_domain===true).slice(0,limit);
-    const out=[];
-    for(const x of selected){
-      let imageUrl='',thumbUrl='';
-      try{
-        const ir=await fetch('https://api.artic.edu/api/v1/images/'+encodeURIComponent(x.image_id)+'?fields=id,content,iiif_url,lqip');
-        if(ir.ok){
-          const idata=(await ir.json()).data||{};
-          const contentUrl=typeof idata.content==='string'&&/^https?:\/\//i.test(idata.content)?idata.content:'';
-          const iiifRoot=typeof idata.iiif_url==='string'?idata.iiif_url.replace(/\/$/,''):'';
-          if(contentUrl){imageUrl=contentUrl;thumbUrl=contentUrl;}
-          else if(iiifRoot){imageUrl=iiifRoot+'/full/843,/0/default.jpg';thumbUrl=iiifRoot+'/full/600,/0/default.jpg';}
-          else if(idata.lqip){imageUrl=idata.lqip;thumbUrl=idata.lqip;}
+    return (d.results||[]).slice(0,limit).map((x,n)=>({
+      pageid:'smithsonian-'+(x.id||n),
+      title:'File:'+(x.title||'Smithsonian item'),
+      _source:'smithsonian',
+      imageinfo:[{
+        url:x.image,
+        thumburl:x.thumbnail||x.image,
+        descriptionurl:x.url||'https://www.si.edu/openaccess',
+        extmetadata:{
+          LicenseShortName:{value:x.license||'CC0'},
+          UsageTerms:{value:x.license||'CC0'},
+          Artist:{value:x.creator||'Smithsonian Institution'},
+          Credit:{value:'Smithsonian Open Access'},
+          ImageDescription:{value:x.title||''}
         }
-      }catch{}
-      if(!imageUrl){
-        const base=((d.config&&d.config.iiif_url)||'https://www.artic.edu/iiif/2').replace('https://www-test.artic.edu','https://www.artic.edu').replace(/\/$/,'');
-        imageUrl=base+'/'+x.image_id+'/full/843,/0/default.jpg';
-        thumbUrl=base+'/'+x.image_id+'/full/600,/0/default.jpg';
-      }
-      out.push({
-        pageid:'aic-'+x.id,
-        title:'File:'+(x.title||('Art Institute of Chicago artwork '+x.id)),
-        _source:'aic',
-        imageinfo:[{
-          url:imageUrl,
-          thumburl:thumbUrl||imageUrl,
-          descriptionurl:'https://www.artic.edu/artworks/'+x.id,
-          extmetadata:{
-            LicenseShortName:{value:'Public domain'},
-            UsageTerms:{value:'Public domain'},
-            Artist:{value:x.artist_display||'Art Institute of Chicago'},
-            Credit:{value:x.credit_line||'Art Institute of Chicago'},
-            ImageDescription:{value:[x.title,x.date_display,x.medium_display].filter(Boolean).join(' · ')}
-          }
-        }]
-      });
-    }
-    return out;
+      }]
+    })).filter(x=>x.imageinfo?.[0]?.url);
   }catch{return[]}
 }
 function relevanceScore(page,term){
@@ -430,9 +404,9 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
       chosen=[...photos];
       if(chosen.length<30)chosen.push(...acceptable.slice(0,30-chosen.length));
     }
-    pages=chosen.slice(0,18).map(x=>x.page);pages.forEach(p=>p._source='commons');const searchName=entity.english||term;const [loc,met,aic]=await Promise.all([locPages(searchName,8,allowArt),metPages(searchName,8),aicPages(searchName,8)]),mixed=[];for(let i=0;i<30&&mixed.length<30;i++){if(pages[i])mixed.push(pages[i]);if(loc[i])mixed.push(loc[i]);if(met[i])mixed.push(met[i]);if(aic[i])mixed.push(aic[i])}pages=mixed.slice(0,30);
+    pages=chosen.slice(0,18).map(x=>x.page);pages.forEach(p=>p._source='commons');const searchName=entity.english||term;const [loc,met,smithsonian]=await Promise.all([locPages(searchName,8,allowArt),metPages(searchName,8),smithsonianPages(searchName,8)]),mixed=[];for(let i=0;i<30&&mixed.length<30;i++){if(pages[i])mixed.push(pages[i]);if(loc[i])mixed.push(loc[i]);if(met[i])mixed.push(met[i]);if(smithsonian[i])mixed.push(smithsonian[i])}pages=mixed.slice(0,30);
   }else{
-    const commons=await commonsPages(term+' filetype:bitmap',16);commons.forEach(p=>p._source='commons');const [loc,met,aic]=await Promise.all([locPages(term,8),metPages(term,8),aicPages(term,8)]);pages=[];for(let i=0;i<30&&pages.length<30;i++){if(commons[i])pages.push(commons[i]);if(loc[i])pages.push(loc[i]);if(met[i])pages.push(met[i]);if(aic[i])pages.push(aic[i])}
+    const commons=await commonsPages(term+' filetype:bitmap',16);commons.forEach(p=>p._source='commons');const [loc,met,smithsonian]=await Promise.all([locPages(term,8),metPages(term,8),smithsonianPages(term,8)]);pages=[];for(let i=0;i<30&&pages.length<30;i++){if(commons[i])pages.push(commons[i]);if(loc[i])pages.push(loc[i]);if(met[i])pages.push(met[i]);if(smithsonian[i])pages.push(smithsonian[i])}
   }status.textContent=pages.length?t.found(pages.length):t.none;const licenseNames=new Set();for(const x of pages){const i=x.imageinfo?.[0],m=i?.extmetadata||{};if(!i)continue;const li=licenseInfo(m),title=x.title.replace(/^File:/,'');const artist=strip(m.Artist?.value)||t.unknown,credit=strip(m.Credit?.value)||t.see;licenseNames.add(li.raw);const card=document.createElement('article');card.className='card';card.dataset.license=li.raw;card.dataset.source=x._source||'commons';card.innerHTML=`<img loading="lazy" src="${esc(i.thumburl||i.url)}" alt="${esc(strip(m.ImageDescription?.value)||title)}"><div class="info"><div class="title" title="${esc(title)}">${esc(title)}</div><div class="meta">${esc(li.raw)}</div><div class="creator">${esc(t.creator)}: ${esc(artist)}</div><div class="actions"><a href="${esc(i.descriptionurl)}" target="_blank" rel="noopener">${esc(t.file)}</a><button class="download" type="button">${esc(t.download)}</button><button class="lic" type="button">${esc(t.license)}</button></div></div>`;card.querySelector('img').onclick=()=>openImage(i.url,title,li.raw,i.descriptionurl);card.querySelector('img').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openImage(i.url,title,li.raw,i.descriptionurl)}};card.querySelector('img').tabIndex=0;card.querySelector('img').setAttribute('role','button');card.querySelector('.download').onclick=()=>downloadImage(i.url,title);card.querySelector('.lic').onclick=()=>{
   const licenseLink=li.url&&/^https?:\/\//i.test(li.url)?`<a href="${esc(li.url)}" target="_blank" rel="noopener">${esc(t.licensePage)}</a>`:'';
   const usage=strip(m.UsageTerms?.value||'');
