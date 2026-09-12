@@ -10,7 +10,7 @@ export default async function handler(req, res) {
 
   const q = String(req.query.q || '').trim();
   const rows = Math.min(
-    Math.max(Number(req.query.rows) || 20, 1),
+    Math.max(Number(req.query.rows) || 30, 1),
     50
   );
 
@@ -67,7 +67,7 @@ export default async function handler(req, res) {
         metadataUsage?.access || ''
       ).toUpperCase();
 
-      // אנחנו רוצים רק פריטי Open Access / CC0
+      // רק פריטי Open Access / CC0
       if (access && access !== 'CC0') continue;
 
       const freeText =
@@ -87,6 +87,44 @@ export default async function handler(req, res) {
         descriptive?.guid ||
         '';
 
+      // טקסט מורחב לצורך בדיקת רלוונטיות
+      const metadataParts = [];
+
+      metadataParts.push(
+        item?.title || '',
+        descriptive?.title?.content || '',
+        descriptive?.data_source || '',
+        descriptive?.record_ID || '',
+        descriptive?.unit_code || ''
+      );
+
+      for (const value of Object.values(freeText)) {
+        if (!Array.isArray(value)) continue;
+
+        for (const entry of value) {
+          if (entry?.content) {
+            metadataParts.push(entry.content);
+          }
+        }
+      }
+
+      const indexedStructured =
+        item?.content?.indexedStructured || {};
+
+      for (const value of Object.values(indexedStructured)) {
+        if (Array.isArray(value)) {
+          metadataParts.push(...value.map(String));
+        } else if (value) {
+          metadataParts.push(String(value));
+        }
+      }
+
+      const indexText = metadataParts
+        .filter(Boolean)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
       results.push({
         id: item.id || '',
         title: item.title || 'Smithsonian item',
@@ -95,7 +133,8 @@ export default async function handler(req, res) {
         url: itemUrl,
         creator,
         license: 'CC0',
-        source: 'Smithsonian Open Access'
+        source: 'Smithsonian Open Access',
+        indexText
       });
     }
 
