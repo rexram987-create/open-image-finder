@@ -101,6 +101,35 @@ async function categoryFiles(category,limit=80){
   const r=await fetch('https://commons.wikimedia.org/w/api.php?'+p),d=await r.json();
   return Object.values(d.query?.pages||{});
 }
+async function categorySubcategories(category,limit=50){
+  if(!category)return[];
+  const p=new URLSearchParams({action:'query',list:'categorymembers',cmtitle:'Category:'+category,cmtype:'subcat',cmlimit:String(limit),format:'json',origin:'*'});
+  const r=await fetch('https://commons.wikimedia.org/w/api.php?'+p),d=await r.json();
+  return (d.query?.categorymembers||[]).map(x=>(x.title||'').replace(/^Category:/,''));
+}
+async function findCategories(searchText,limit=20){
+  const p=new URLSearchParams({action:'query',list:'search',srsearch:searchText,srnamespace:'14',srlimit:String(limit),format:'json',origin:'*'});
+  const r=await fetch('https://commons.wikimedia.org/w/api.php?'+p),d=await r.json();
+  return (d.query?.search||[]).map(x=>(x.title||'').replace(/^Category:/,''));
+}
+async function personRepresentationFiles(name){
+  if(!name)return[];
+  const kinds=['bust','busts','statue','statues','sculpture','sculptures','portrait','portraits'];
+  const found=[];
+  for(const kind of kinds){
+    const cats=await findCategories(`"${name}" ${kind}`,12);
+    for(const cat of cats){
+      const lc=cat.toLocaleLowerCase(),n=name.toLocaleLowerCase();
+      if(!lc.includes(n))continue;
+      if(!/bust|statue|sculpture|portrait|head|relief/i.test(cat))continue;
+      addUniquePages(found,await categoryFiles(cat,60));
+      const subs=await categorySubcategories(cat,20);
+      for(const sub of subs.slice(0,8))addUniquePages(found,await categoryFiles(sub,40));
+      if(found.length>=80)return found;
+    }
+  }
+  return found;
+}
 async function commonsPages(searchText,limit=30){
   const p=new URLSearchParams({action:'query',generator:'search',gsrsearch:searchText,gsrnamespace:'6',gsrlimit:String(limit),prop:'imageinfo',iiprop:'url|mime|mediatype|commonmetadata|extmetadata',iiurlwidth:'600',format:'json',origin:'*'});
   const r=await fetch('https://commons.wikimedia.org/w/api.php?'+p),d=await r.json();
@@ -181,18 +210,22 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
     const native=term.replace(/"/g,'').trim();
     const candidates=[];
     const allowArt=entity.isPerson;
-    const categoryDirect=await categoryFiles(entity.category,100);
-    addUniquePages(candidates,categoryDirect);
-    if(english)addUniquePages(candidates,await commonsPages(`intitle:"${english}" filetype:bitmap`,100));
-    if(native&&native.toLocaleLowerCase()!==english.toLocaleLowerCase())addUniquePages(candidates,await commonsPages(`intitle:"${native}" filetype:bitmap`,60));
-    if(english)addUniquePages(candidates,await commonsPages(`"${english}" filetype:bitmap`,100));
-    if(native)addUniquePages(candidates,await commonsPages(`"${native}" filetype:bitmap`,60));
+    let categoryDirect=[];
+    let representationDirect=[];
     if(allowArt&&english){
-      for(const kind of ['bust','statue','sculpture','portrait']){
-        addUniquePages(candidates,await commonsPages(`"${english}" ${kind} filetype:bitmap`,60));
-      }
+      representationDirect=await personRepresentationFiles(english);
+      addUniquePages(candidates,representationDirect);
+      if(english)addUniquePages(candidates,await commonsPages(`intitle:"${english}" filetype:bitmap`,100));
+      if(native&&native.toLocaleLowerCase()!==english.toLocaleLowerCase())addUniquePages(candidates,await commonsPages(`intitle:"${native}" filetype:bitmap`,60));
+    }else{
+      categoryDirect=await categoryFiles(entity.category,100);
+      addUniquePages(candidates,categoryDirect);
+      if(english)addUniquePages(candidates,await commonsPages(`intitle:"${english}" filetype:bitmap`,100));
+      if(native&&native.toLocaleLowerCase()!==english.toLocaleLowerCase())addUniquePages(candidates,await commonsPages(`intitle:"${native}" filetype:bitmap`,60));
+      if(english)addUniquePages(candidates,await commonsPages(`"${english}" filetype:bitmap`,100));
+      if(native)addUniquePages(candidates,await commonsPages(`"${native}" filetype:bitmap`,60));
     }
-    const directIds=new Set(categoryDirect.map(x=>x.pageid));
+    const directIds=new Set([...categoryDirect,...representationDirect].map(x=>x.pageid));
     const scoreTerms=[term,entity.english].filter(Boolean);
     const scored=candidates.map((page,index)=>{
       const title=(page.title||'').replace(/^File:/,'').toLocaleLowerCase();
@@ -205,8 +238,8 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
       const directName=scoreTerms.some(x=>title.includes(x.toLocaleLowerCase()));
       const photo=photoLikelihood(page,allowArt);
       const representation=/\b(bust|busts|statue|statues|sculpture|sculptures|portrait|portraits|relief|reliefs|marble|bronze|coin|coins|medallion)\b/i.test(searchable);
-      const personRelevant=!allowArt||nameHit||directIds.has(page.pageid);
-      return{page,index,photo,nameHit,representation,personRelevant,score:(directIds.has(page.pageid)?80:0)+(directName?100:0)+(nameHit?120:0)+visualMatchScore(page,scoreTerms,allowArt)+photo};
+      const personRelevant=!allowArt||nameHit||representationDirect.some(x=>x.pageid===page.pageid);
+      return{page,index,photo,nameHit,representation,personRelevant,score:(directIds.has(page.pageid)?120:0)+(directName?100:0)+(nameHit?140:0)+visualMatchScore(page,scoreTerms,allowArt)+photo};
     });
     scored.sort((a,b)=>b.score-a.score||b.photo-a.photo||a.index-b.index);
 
