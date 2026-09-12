@@ -114,14 +114,14 @@ async function findCategories(searchText,limit=20){
 }
 async function personRepresentationFiles(name){
   if(!name)return[];
-  const kinds=['bust','busts','statue','statues','sculpture','sculptures','portrait','portraits'];
+  const kinds=['bust','busts','statue','statues','sculpture','sculptures','portrait','portraits','engraving','engravings','etching','etchings','print','prints','historical illustration','historical illustrations'];
   const found=[];
   for(const kind of kinds){
     const cats=await findCategories(`"${name}" ${kind}`,12);
     for(const cat of cats){
       const lc=cat.toLocaleLowerCase(),n=name.toLocaleLowerCase();
       if(!lc.includes(n))continue;
-      if(!/bust|statue|sculpture|portrait|head|relief/i.test(cat))continue;
+      if(!/bust|statue|sculpture|portrait|head|relief|engraving|etching|print|illustration/i.test(cat))continue;
       addUniquePages(found,await categoryFiles(cat,60));
       const subs=await categorySubcategories(cat,20);
       for(const sub of subs.slice(0,8))addUniquePages(found,await categoryFiles(sub,40));
@@ -172,7 +172,7 @@ function photoLikelihood(page,allowArt=false){
   const nonPhoto=/\b(emblem|emblems|logo|logos|coat of arms|coats of arms|heraldry|heraldic|symbol|symbols|icon|icons|seal|seals|flag|flags|badge|badges|crest|crests|clipart|vector|svg|silhouette|cartoon|anatomy|plate|plates|page|pages|book|journal|manuscript|scan|scanned|text|document|paper|article|catalogue|catalog|archive|map|diagram|chart|illustration|drawing|painting|engraving|lithograph|poster|cover|title page)\b/i;
   if(nonPhoto.test(metaText))score-=180;
   if(allowArt){
-    const historicalRepresentation=/\b(bust|busts|statue|statues|sculpture|sculptures|portrait|portraits|relief|coin|coins|medallion|marble|bronze)\b/i;
+    const historicalRepresentation=/\b(bust|busts|statue|statues|sculpture|sculptures|portrait|portraits|relief|reliefs|coin|coins|medallion|marble|bronze|engraving|engravings|engraved|etching|etchings|print|prints|historical illustration|historical illustrations)\b/i;
     if(historicalRepresentation.test(metaText))score+=220;
   }
 
@@ -237,14 +237,16 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
       });
       const directName=scoreTerms.some(x=>title.includes(x.toLocaleLowerCase()));
       const photo=photoLikelihood(page,allowArt);
-      const representation=/\b(bust|busts|statue|statues|sculpture|sculptures|portrait|portraits|relief|reliefs|marble|bronze|coin|coins|medallion)\b/i.test(searchable);
+      const representation=/\b(bust|busts|statue|statues|sculpture|sculptures|portrait|portraits|relief|reliefs|marble|bronze|coin|coins|medallion|engraving|engravings|engraved|etching|etchings|print|prints|historical illustration|historical illustrations)\b/i.test(searchable);
       const representationCategory=representationDirect.some(x=>x.pageid===page.pageid);
       const contextEvent=/\b(celebration|festival|parade|ceremony|commemoration|anniversary|crowd|gathering|procession|event|unveiling|dedication|memorial service|street scene|square|plaza)\b/i.test(title);
-      const subjectPattern=/\b(bust|statue|sculpture|portrait|relief|head|marble|bronze|coin|medallion)\b/i;
+      const documentScan=/\b(newspaper|newspapers|article|articles|page|pages|book|books|text|document|documents|manuscript|manuscripts|clipping|clippings|press|bulletin|journal|magazine|title page|front page|advertisement|advertisements)\b/i.test(searchable);
+      const subjectPattern=/\b(bust|statue|sculpture|portrait|relief|head|marble|bronze|coin|medallion|engraving|etching|print|historical illustration)\b/i;
       const titleLooksLikeRepresentation=directName&&subjectPattern.test(title)&&!contextEvent;
-      const personRelevant=!allowArt||titleLooksLikeRepresentation||representationCategory;
+      const personRelevant=!allowArt||(!documentScan&&(titleLooksLikeRepresentation||representationCategory));
       let subjectPenalty=0;
       if(allowArt&&contextEvent)subjectPenalty-=220;
+      if(allowArt&&documentScan)subjectPenalty-=500;
       if(allowArt&&nameHit&&!titleLooksLikeRepresentation&&!representationCategory)subjectPenalty-=120;
       return{page,index,photo,nameHit,representation,personRelevant,score:(directIds.has(page.pageid)?140:0)+(titleLooksLikeRepresentation?160:0)+(nameHit?70:0)+visualMatchScore(page,scoreTerms,allowArt)+photo+subjectPenalty};
     });
