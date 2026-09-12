@@ -115,33 +115,36 @@ async function findCategories(searchText,limit=20){
 async function personRepresentationFiles(name){
   if(!name)return[];
   const groups=[
-    ['bust','busts','statue','statues','sculpture','sculptures','relief','reliefs'],
-    ['portrait','portraits'],
-    ['engraving','engravings','etching','etchings','print','prints'],
-    ['historical illustration','historical illustrations']
+    {kind:'sculpture',terms:['busts','statues','sculptures','reliefs']},
+    {kind:'portrait',terms:['portraits','paintings']},
+    {kind:'engraving',terms:['engravings','etchings','prints']},
+    {kind:'illustration',terms:['illustrations','drawings']}
   ];
-  const buckets=[];
-  for(const kinds of groups){
-    const bucket=[];
-    for(const kind of kinds){
-      const cats=await findCategories(`"${name}" ${kind}`,10);
+  const buckets={sculpture:[],portrait:[],engraving:[],illustration:[]};
+  const n=name.toLocaleLowerCase();
+  for(const group of groups){
+    for(const term of group.terms){
+      const cats=await findCategories(`"${name}" ${term}`,12);
       for(const cat of cats){
-        const lc=cat.toLocaleLowerCase(),n=name.toLocaleLowerCase();
+        const lc=cat.toLocaleLowerCase();
         if(!lc.includes(n))continue;
-        if(!/bust|statue|sculpture|portrait|head|relief|engraving|etching|print|illustration/i.test(cat))continue;
-        addUniquePages(bucket,await categoryFiles(cat,40));
-        const subs=await categorySubcategories(cat,12);
-        for(const sub of subs.slice(0,5))addUniquePages(bucket,await categoryFiles(sub,25));
-        if(bucket.length>=35)break;
+        if(!/bust|statue|sculpture|portrait|painting|head|relief|engraving|etching|print|illustration|drawing/i.test(cat))continue;
+        const direct=await categoryFiles(cat,50);
+        for(const p of direct){
+          p._personRepKind=group.kind;
+          p._personRepCategory=cat;
+        }
+        addUniquePages(buckets[group.kind],direct);
+        if(buckets[group.kind].length>=35)break;
       }
-      if(bucket.length>=35)break;
+      if(buckets[group.kind].length>=35)break;
     }
-    buckets.push(bucket.slice(0,35));
   }
   const found=[];
   for(let i=0;i<35;i++){
-    for(const bucket of buckets){
-      if(bucket[i])addUniquePages(found,[bucket[i]]);
+    for(const group of groups){
+      const p=buckets[group.kind][i];
+      if(p)addUniquePages(found,[p]);
       if(found.length>=100)return found;
     }
   }
@@ -238,10 +241,10 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
     let categoryDirect=[];
     let representationDirect=[];
     if(allowArt&&english){
+      // Historical people: trust only files taken directly from dedicated
+      // Commons representation categories. No free-text fallback.
       representationDirect=await personRepresentationFiles(english);
       addUniquePages(candidates,representationDirect);
-      if(english)addUniquePages(candidates,await commonsPages(`intitle:"${english}" filetype:bitmap`,100));
-      if(native&&native.toLocaleLowerCase()!==english.toLocaleLowerCase())addUniquePages(candidates,await commonsPages(`intitle:"${native}" filetype:bitmap`,60));
     }else{
       categoryDirect=await categoryFiles(entity.category,100);
       addUniquePages(candidates,categoryDirect);
@@ -263,13 +266,13 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
       const directName=scoreTerms.some(x=>title.includes(x.toLocaleLowerCase()));
       const photo=photoLikelihood(page,allowArt);
       const representation=/\b(bust|busts|statue|statues|sculpture|sculptures|portrait|portraits|relief|reliefs|marble|bronze|coin|coins|medallion|engraving|engravings|engraved|etching|etchings|print|prints|historical illustration|historical illustrations)\b/i.test(searchable);
-      const repKind=representationKind(searchable);
-      const representationCategory=representationDirect.some(x=>x.pageid===page.pageid);
+      const repKind=page._personRepKind||representationKind(searchable);
+      const representationCategory=allowArt?Boolean(page._personRepKind):representationDirect.some(x=>x.pageid===page.pageid);
       const contextEvent=/\b(celebration|festival|parade|ceremony|commemoration|anniversary|crowd|gathering|procession|event|unveiling|dedication|memorial service|street scene|square|plaza)\b/i.test(title);
       const documentScan=/\b(newspaper|newspapers|article|articles|page|pages|book|books|text|document|documents|manuscript|manuscripts|clipping|clippings|press|bulletin|journal|magazine|title page|front page|advertisement|advertisements)\b/i.test(searchable);
       const subjectPattern=/\b(bust|statue|sculpture|portrait|relief|head|marble|bronze|coin|medallion|engraving|etching|print|historical illustration)\b/i;
       const titleLooksLikeRepresentation=directName&&subjectPattern.test(title)&&!contextEvent;
-      const personRelevant=!allowArt||(!documentScan&&!contextEvent&&(titleLooksLikeRepresentation||representationCategory));
+      const personRelevant=!allowArt||(!documentScan&&!contextEvent&&representationCategory);
       let subjectPenalty=0;
       if(allowArt&&contextEvent)subjectPenalty-=220;
       if(allowArt&&documentScan)subjectPenalty-=500;
