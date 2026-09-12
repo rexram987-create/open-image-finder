@@ -250,8 +250,8 @@ async function aicPages(term,limit=8){
       title:'File:'+(x.title||('Art Institute of Chicago artwork '+x.id)),
       _source:'aic',
       imageinfo:[{
-        url:'/api/aic-image?id='+x.image_id',
-        thumburl:'/api/aic-image?id='+x.image_id',
+        url:'/api/aic-image?id='+x.image_id,
+        thumburl:'/api/aic-image?id='+x.image_id,
         descriptionurl:'https://www.artic.edu/artworks/'+x.id,
         extmetadata:{
           LicenseShortName:{value:'Public domain'},
