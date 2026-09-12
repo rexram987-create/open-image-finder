@@ -61,17 +61,17 @@ function applyLang(){const t=T[lang];document.documentElement.lang=lang;document
 $('#lang').onclick=()=>{lang=lang==='he'?'en':'he';applyLang();if(results.children.length)search()};
 async function downloadImage(url,title){try{const r=await fetch(url);if(!r.ok)throw 0;const blob=await r.blob(),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=title;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}catch{window.open(url,'_blank','noopener')}}
 function applyLicenseFilter(){
-  const t=T[lang],value=licenseFilter.value;
+  const t=T[lang],value=licenseFilter.value,source=sourceFilter.value;
   let visible=0,total=0;
   results.querySelectorAll('.card').forEach(card=>{
     total++;
-    const show=!value||card.dataset.license===value;
+    const show=(!value||card.dataset.license===value)&&(!source||card.dataset.source===source);
     card.hidden=!show;
     if(show)visible++;
   });
-  if(total)status.textContent=value?t.shown(visible,total):t.found(total);
+  if(total)status.textContent=(value||source)?t.shown(visible,total):t.found(total);
 }
-licenseFilter.addEventListener('change',applyLicenseFilter);
+licenseFilter.addEventListener('change',applyLicenseFilter);sourceFilter.addEventListener('change',applyLicenseFilter);
 async function resolveSearchEntity(term){
   try{
     const langCode=lang==='he'?'he':'en';
