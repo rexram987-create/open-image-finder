@@ -87,43 +87,24 @@ export default async function handler(req, res) {
         descriptive?.guid ||
         '';
 
-      // טקסט מורחב לצורך בדיקת רלוונטיות
-      const metadataParts = [];
+      const indexedStructured = item?.content?.indexedStructured || {};
 
-      metadataParts.push(
-        item?.title || '',
-        descriptive?.title?.content || '',
-        descriptive?.data_source || '',
-        descriptive?.record_ID || '',
-        descriptive?.unit_code || ''
-      );
+      const namesText = [
+        ...(Array.isArray(freeText?.name) ? freeText.name.map(x => x?.content || '') : []),
+        ...(Array.isArray(indexedStructured?.name) ? indexedStructured.name.map(String) : [])
+      ].filter(Boolean).join(' ');
 
-      for (const value of Object.values(freeText)) {
-        if (!Array.isArray(value)) continue;
+      const subjectsText = [
+        ...(Array.isArray(freeText?.topic) ? freeText.topic.map(x => x?.content || '') : []),
+        ...(Array.isArray(freeText?.subject) ? freeText.subject.map(x => x?.content || '') : []),
+        ...(Array.isArray(indexedStructured?.topic) ? indexedStructured.topic.map(String) : []),
+        ...(Array.isArray(indexedStructured?.subject) ? indexedStructured.subject.map(String) : [])
+      ].filter(Boolean).join(' ');
 
-        for (const entry of value) {
-          if (entry?.content) {
-            metadataParts.push(entry.content);
-          }
-        }
-      }
-
-      const indexedStructured =
-        item?.content?.indexedStructured || {};
-
-      for (const value of Object.values(indexedStructured)) {
-        if (Array.isArray(value)) {
-          metadataParts.push(...value.map(String));
-        } else if (value) {
-          metadataParts.push(String(value));
-        }
-      }
-
-      const indexText = metadataParts
-        .filter(Boolean)
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+      const objectTypesText = [
+        ...(Array.isArray(indexedStructured?.object_type) ? indexedStructured.object_type.map(String) : []),
+        ...(Array.isArray(indexedStructured?.type) ? indexedStructured.type.map(String) : [])
+      ].filter(Boolean).join(' ');
 
       results.push({
         id: item.id || '',
@@ -134,7 +115,9 @@ export default async function handler(req, res) {
         creator,
         license: 'CC0',
         source: 'Smithsonian Open Access',
-        indexText
+        namesText,
+        subjectsText,
+        objectTypesText
       });
     }
 
