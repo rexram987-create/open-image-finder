@@ -244,14 +244,14 @@ async function aicPages(term,limit=8){
     const r=await fetch('https://api.artic.edu/api/v1/artworks/search?'+p.toString());
     if(!r.ok)return[];
     const d=await r.json();
-    const base=(d.config&&d.config.iiif_url)||'https://www.artic.edu/iiif/2';
+    const base=((d.config&&d.config.iiif_url)||'https://www.artic.edu/iiif/2').replace('https://www-test.artic.edu','https://www.artic.edu').replace(/\/$/,'');
     return (d.data||[]).filter(x=>x&&x.image_id&&x.is_public_domain===true).slice(0,limit).map(x=>({
       pageid:'aic-'+x.id,
       title:'File:'+(x.title||('Art Institute of Chicago artwork '+x.id)),
       _source:'aic',
       imageinfo:[{
         url:base+'/'+x.image_id+'/full/843,/0/default.jpg',
-        thumburl:base+'/'+x.image_id+'/full/600,/0/default.jpg',
+        thumburl:base+'/'+x.image_id+'/full/843,/0/default.jpg',
         descriptionurl:'https://www.artic.edu/artworks/'+x.id,
         extmetadata:{
           LicenseShortName:{value:'Public domain'},
