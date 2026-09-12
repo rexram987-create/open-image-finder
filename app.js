@@ -6,27 +6,49 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 function licenseInfo(m){
   const raw=strip(m.LicenseShortName?.value||m.UsageTerms?.value||m.License?.value||T[lang].unknown);
   const url=(m.LicenseUrl?.value||'').trim();
-  const l=raw.toLowerCase();
-  const ccLike=/creative commons|\bcc\s*(?:by|0)|attribution/i.test(raw);
+  const l=(raw+' '+url).toLowerCase();
+  const ccLike=/creative commons|\bcc\s*(?:by|0)|attribution|creativecommons\.org\/licenses/i.test(raw+' '+url);
   const versionMatch=ccLike?(raw.match(/(?:^|\s)([1-4](?:\.0|\.5)?)(?:\s|$|international)/i)||url.match(/\/licenses\/[^/]+\/([1-4](?:\.0|\.5)?)\/?/i)):null;
   const version=versionMatch?.[1]||'';
   let share=null,edit=null,commercial=null,attribution=null,sameLicense=null;
   let he='יש לבדוק את תנאי הרישיון בדף הקובץ לפני שימוש.',en='Check the license terms on the file page before use.';
+  const isNCND=/by-nc-nd|attribution.noncommercial.noderiv|attribution-noncommercial-noderiv/i.test(l);
+  const isNCSA=/by-nc-sa|attribution.noncommercial.sharealike|attribution-noncommercial-sharealike/i.test(l);
+  const isNC=/by-nc(?!-(?:sa|nd))|\/by-nc\/|attribution.noncommercial(?!.*(?:sharealike|noderiv))/i.test(l);
+  const isND=/by-nd|\/by-nd\/|attribution.noderiv/i.test(l);
+  const isSA=/by-sa|\/by-sa\/|attribution.sharealike/i.test(l);
+  const isBY=/\bcc\s*by\b|\/by\/|creative commons attribution/i.test(l);
   if(/cc0|public domain|pd-old|pd-us|pd-art|pd-self/.test(l)){
     share=edit=commercial=true;attribution=false;sameLicense=false;
-    he='התמונה מסומנת כנחלת הכלל או CC0. בדרך כלל מותר להעתיק, לערוך ולהשתמש גם מסחרית ללא בקשת רשות. מתן קרדיט עדיין מומלץ כשאפשר.';
-    en='The image is marked Public Domain or CC0. Copying, adapting and commercial use are generally allowed without permission. Credit is still recommended when practical.';
-  }else if(/cc by-sa|creative commons attribution-share alike|attribution-sharealike/.test(l)){
+    he='התמונה מסומנת כנחלת הכלל או CC0. בדרך כלל מותר להעתיק, לשתף, לשנות ולהשתמש גם מסחרית ללא בקשת רשות. מתן קרדיט עדיין מומלץ כשאפשר.';
+    en='The image is marked Public Domain or CC0. Copying, sharing, adapting and commercial use are generally allowed without permission. Credit is still recommended when practical.';
+  }else if(isNCND){
+    share=true;edit=false;commercial=false;attribution=true;sameLicense=false;
+    he='מותר לשתף את היצירה ללא שינוי ולתת קרדיט מתאים. אסור להשתמש בה מסחרית, ואסור לשתף גרסה שעברה שינוי.';
+    en='You may share the unmodified work with proper attribution. Commercial use is not allowed, and adapted versions may not be shared.';
+  }else if(isNCSA){
+    share=true;edit=true;commercial=false;attribution=true;sameLicense=true;
+    he='מותר לשתף וליצור גרסאות מותאמות לשימוש לא־מסחרי בלבד. חובה לתת קרדיט, וגרסה שעברה שינוי חייבת להישאר באותו רישיון או ברישיון תואם.';
+    en='Sharing and adaptations are allowed for noncommercial use only. Attribution is required, and adaptations must use the same or a compatible license.';
+  }else if(isNC){
+    share=true;edit=true;commercial=false;attribution=true;sameLicense=false;
+    he='מותר לשתף וליצור גרסאות מותאמות, אך רק לשימוש לא־מסחרי. חובה לתת קרדיט מתאים ליוצר.';
+    en='Sharing and adaptations are allowed, but only for noncommercial use. Proper attribution is required.';
+  }else if(isND){
+    share=true;edit=false;commercial=true;attribution=true;sameLicense=false;
+    he='מותר לשתף ולהשתמש ביצירה גם מסחרית עם קרדיט מתאים, אך אסור לשתף גרסה שעברה שינוי.';
+    en='You may share and use the work commercially with proper attribution, but adapted versions may not be shared.';
+  }else if(isSA){
     share=edit=commercial=true;attribution=true;sameLicense=true;
-    he='מותר להעתיק, לערוך ולהשתמש גם מסחרית, בתנאי שנותנים ייחוס מתאים ושומרים על אותו רישיון ביצירה נגזרת.';
-    en='Copying, adapting and commercial use are allowed, provided proper attribution is given and adaptations use the same license.';
-  }else if(/cc by(?!-sa)|creative commons attribution(?!-share)/.test(l)){
+    he='מותר להעתיק, לשתף, לשנות ולהשתמש גם מסחרית, בתנאי שנותנים ייחוס מתאים ושומרים על אותו רישיון או רישיון תואם ביצירה נגזרת.';
+    en='Copying, sharing, adapting and commercial use are allowed, provided proper attribution is given and adaptations use the same or a compatible license.';
+  }else if(isBY){
     share=edit=commercial=true;attribution=true;sameLicense=false;
-    he='מותר להעתיק, לערוך ולהשתמש גם מסחרית, בתנאי שנותנים ייחוס מתאים ליוצר.';
-    en='Copying, adapting and commercial use are allowed, provided proper attribution is given.';
+    he='מותר להעתיק, לשתף, לשנות ולהשתמש גם מסחרית, בתנאי שנותנים קרדיט מתאים ליוצר.';
+    en='Copying, sharing, adapting and commercial use are allowed, provided proper attribution is given.';
   }else if(/gfdl|gnu free documentation/.test(l)){
     share=edit=commercial=true;attribution=true;sameLicense=true;
-    he='בדרך כלל מותר להעתיק, לערוך ולהשתמש גם מסחרית, אך ל־GFDL יש דרישות ייחוס ושיתוף ברישיון זהה או תואם. מומלץ לבדוק את דף הקובץ.';
+    he='בדרך כלל מותר להעתיק, לשנות ולהשתמש גם מסחרית, אך ל־GFDL יש דרישות ייחוס ושיתוף ברישיון זהה או תואם. מומלץ לבדוק את דף הקובץ.';
     en='Copying, adapting and commercial use are generally allowed, but GFDL has attribution and share-alike requirements. Check the file page for the exact terms.';
   }
   return{raw,url,note:lang==='he'?he:en,share,edit,commercial,attribution,sameLicense,version};
