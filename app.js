@@ -234,29 +234,45 @@ async function metPages(term,limit=10){
     }));
   }catch{return[]}
 }
-async function smithsonianPages(term,limit=8){
+async function smithsonianPages(term,limit=16,personMode=false){
   try{
-    const p=new URLSearchParams({q:term,rows:String(Math.max(limit*2,16))});
-    const r=await fetch('/api/smithsonian?'+p.toString());
-    if(!r.ok)return[];
-    const d=await r.json();
-    return (d.results||[]).slice(0,limit).map((x,n)=>({
-      pageid:'smithsonian-'+(x.id||n),
-      title:'File:'+(x.title||'Smithsonian item'),
-      _source:'smithsonian',
-      imageinfo:[{
-        url:x.image,
-        thumburl:x.thumbnail||x.image,
-        descriptionurl:x.url||'https://www.si.edu/openaccess',
-        extmetadata:{
-          LicenseShortName:{value:x.license||'CC0'},
-          UsageTerms:{value:x.license||'CC0'},
-          Artist:{value:x.creator||'Smithsonian Institution'},
-          Credit:{value:'Smithsonian Open Access'},
-          ImageDescription:{value:x.title||''}
-        }
-      }]
-    })).filter(x=>x.imageinfo?.[0]?.url);
+    const queries=[term];
+    if(personMode){
+      queries.push(term+' portrait',term+' painting',term+' engraving',term+' print',term+' sculpture');
+      if(/joan of arc/i.test(term))queries.push("Jeanne d'Arc","Saint Joan");
+    }
+    const found=[],seen=new Set();
+    for(const query of queries){
+      const p=new URLSearchParams({q:query,rows:String(Math.max(limit*3,30))});
+      const r=await fetch('/api/smithsonian?'+p.toString());
+      if(!r.ok)continue;
+      const d=await r.json();
+      for(const x of (d.results||[])){
+        const id=String(x.id||x.url||x.image||x.title||'');
+        if(!id||seen.has(id))continue;
+        seen.add(id);
+        found.push({
+          pageid:'smithsonian-'+id,
+          title:'File:'+(x.title||'Smithsonian item'),
+          _source:'smithsonian',
+          imageinfo:[{
+            url:x.image,
+            thumburl:x.thumbnail||x.image,
+            descriptionurl:x.url||'https://www.si.edu/openaccess',
+            extmetadata:{
+              LicenseShortName:{value:x.license||'CC0'},
+              UsageTerms:{value:x.license||'CC0'},
+              Artist:{value:x.creator||'Smithsonian Institution'},
+              Credit:{value:'Smithsonian Open Access'},
+              ImageDescription:{value:x.title||''}
+            }
+          }]
+        });
+        if(found.length>=limit)break;
+      }
+      if(found.length>=limit)break;
+    }
+    return found.filter(x=>x.imageinfo?.[0]?.url).slice(0,limit);
   }catch{return[]}
 }
 function relevanceScore(page,term){
@@ -404,9 +420,9 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
       chosen=[...photos];
       if(chosen.length<30)chosen.push(...acceptable.slice(0,30-chosen.length));
     }
-    pages=chosen.slice(0,18).map(x=>x.page);pages.forEach(p=>p._source='commons');const searchName=entity.english||term;const [loc,met,smithsonian]=await Promise.all([locPages(searchName,8,allowArt),metPages(searchName,8),smithsonianPages(searchName,8)]),mixed=[];for(let i=0;i<30&&mixed.length<30;i++){if(pages[i])mixed.push(pages[i]);if(loc[i])mixed.push(loc[i]);if(met[i])mixed.push(met[i]);if(smithsonian[i])mixed.push(smithsonian[i])}pages=mixed.slice(0,30);
+    pages=chosen.slice(0,24).map(x=>x.page);pages.forEach(p=>p._source='commons');const searchName=entity.english||term;const [loc,met,smithsonian]=await Promise.all([locPages(searchName,12,allowArt),metPages(searchName,12),smithsonianPages(searchName,18,allowArt)]),mixed=[];for(let i=0;i<50&&mixed.length<50;i++){if(pages[i])mixed.push(pages[i]);if(loc[i])mixed.push(loc[i]);if(met[i])mixed.push(met[i]);if(smithsonian[i])mixed.push(smithsonian[i])}pages=mixed.slice(0,50);
   }else{
-    const commons=await commonsPages(term+' filetype:bitmap',16);commons.forEach(p=>p._source='commons');const [loc,met,smithsonian]=await Promise.all([locPages(term,8),metPages(term,8),smithsonianPages(term,8)]);pages=[];for(let i=0;i<30&&pages.length<30;i++){if(commons[i])pages.push(commons[i]);if(loc[i])pages.push(loc[i]);if(met[i])pages.push(met[i]);if(smithsonian[i])pages.push(smithsonian[i])}
+    const commons=await commonsPages(term+' filetype:bitmap',24);commons.forEach(p=>p._source='commons');const [loc,met,smithsonian]=await Promise.all([locPages(term,12),metPages(term,12),smithsonianPages(term,18,false)]);pages=[];for(let i=0;i<50&&pages.length<50;i++){if(commons[i])pages.push(commons[i]);if(loc[i])pages.push(loc[i]);if(met[i])pages.push(met[i]);if(smithsonian[i])pages.push(smithsonian[i])}
   }status.textContent=pages.length?t.found(pages.length):t.none;const licenseNames=new Set();for(const x of pages){const i=x.imageinfo?.[0],m=i?.extmetadata||{};if(!i)continue;const li=licenseInfo(m),title=x.title.replace(/^File:/,'');const artist=strip(m.Artist?.value)||t.unknown,credit=strip(m.Credit?.value)||t.see;licenseNames.add(li.raw);const card=document.createElement('article');card.className='card';card.dataset.license=li.raw;card.dataset.source=x._source||'commons';card.innerHTML=`<img loading="lazy" src="${esc(i.thumburl||i.url)}" alt="${esc(strip(m.ImageDescription?.value)||title)}"><div class="info"><div class="title" title="${esc(title)}">${esc(title)}</div><div class="meta">${esc(li.raw)}</div><div class="creator">${esc(t.creator)}: ${esc(artist)}</div><div class="actions"><a href="${esc(i.descriptionurl)}" target="_blank" rel="noopener">${esc(t.file)}</a><button class="download" type="button">${esc(t.download)}</button><button class="lic" type="button">${esc(t.license)}</button></div></div>`;card.querySelector('img').onclick=()=>openImage(i.url,title,li.raw,i.descriptionurl);card.querySelector('img').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openImage(i.url,title,li.raw,i.descriptionurl)}};card.querySelector('img').tabIndex=0;card.querySelector('img').setAttribute('role','button');card.querySelector('.download').onclick=()=>downloadImage(i.url,title);card.querySelector('.lic').onclick=()=>{
   const licenseLink=li.url&&/^https?:\/\//i.test(li.url)?`<a href="${esc(li.url)}" target="_blank" rel="noopener">${esc(t.licensePage)}</a>`:'';
   const usage=strip(m.UsageTerms?.value||'');
