@@ -163,21 +163,30 @@ async function commonsPages(searchText,limit=30){
   const r=await fetch('https://commons.wikimedia.org/w/api.php?'+p),d=await r.json();
   return Object.values(d.query?.pages||{});
 }
-async function locPages(term,limit=12){
+async function locPages(term,limit=12,personMode=false){
   try{
-    const q=new URLSearchParams({q:term,fo:'json',c:String(limit),at:'results'});
+    const q=new URLSearchParams({q:term,fo:'json',c:String(Math.max(limit*4,30)),at:'results'});
     const r=await fetch('/api/loc?'+q.toString());
     if(!r.ok)return[];
-    const d=await r.json(),out=[];
+    const d=await r.json(),ranked=[];
+    const wanted=/\b(portrait|portraiture|engraving|engraved|etching|print|painting|painted|statue|sculpture|bust|relief|illustration|drawing|lithograph|woodcut)\b/i;
+    const unwanted=/\b(chapel|church|school|street|avenue|building|house|hotel|hospital|library|celebration|ceremony|parade|festival|procession|memorial service|sanctuary|altar|interior|exterior)\b/i;
     for(const x of (d.results||[])){
       const image=x.image?.full||x.image?.thumb||x.image?.square||'';
       if(!image)continue;
+      const title=strip(x.title||'');
+      const summary=strip(x.summary||'');
+      const text=(title+' '+summary).toLocaleLowerCase();
+      if(personMode&&unwanted.test(text))continue;
+      let score=0;
+      if(personMode&&wanted.test(text))score+=100;
+      if(title.toLocaleLowerCase().includes(term.toLocaleLowerCase()))score+=40;
       const itemUrl=x.links?.item||x.link||x.id||'https://www.loc.gov/pictures/';
       const rights=strip(x.restriction||x.rights||'ראו בדף הפריט');
       const creator=strip(x.creator||x.created_published_date||'Library of Congress');
-      out.push({
-        pageid:'loc-'+out.length,
-        title:'File:'+strip(x.title||''),
+      ranked.push({score,page:{
+        pageid:'loc-'+ranked.length,
+        title:'File:'+title,
         _source:'loc',
         imageinfo:[{
           url:image.replace(/^http:/,'https:'),
@@ -187,13 +196,14 @@ async function locPages(term,limit=12){
             LicenseShortName:{value:rights},
             Artist:{value:creator},
             Credit:{value:'Library of Congress'},
-            ImageDescription:{value:strip(x.summary||'')}
+            ImageDescription:{value:summary}
           }
         }]
-      });
-      if(out.length>=limit)break;
+      }});
     }
-    return out;
+    ranked.sort((a,b)=>b.score-a.score);
+    const preferred=personMode?ranked.filter(x=>x.score>=100):ranked;
+    return (preferred.length?preferred:ranked).slice(0,limit).map(x=>x.page);
   }catch{return[]}
 }
 function relevanceScore(page,term){
@@ -341,7 +351,7 @@ async function search(){const term=q.value.trim();if(!term)return;const t=T[lang
       chosen=[...photos];
       if(chosen.length<30)chosen.push(...acceptable.slice(0,30-chosen.length));
     }
-    pages=chosen.slice(0,22).map(x=>x.page);pages.forEach(p=>p._source='commons');const loc=await locPages(entity.english||term,12),mixed=[];for(let i=0;i<30&&mixed.length<30;i++){if(pages[i])mixed.push(pages[i]);if(loc[i])mixed.push(loc[i])}pages=mixed.slice(0,30);
+    pages=chosen.slice(0,22).map(x=>x.page);pages.forEach(p=>p._source='commons');const loc=await locPages(entity.english||term,12,allowArt),mixed=[];for(let i=0;i<30&&mixed.length<30;i++){if(pages[i])mixed.push(pages[i]);if(loc[i])mixed.push(loc[i])}pages=mixed.slice(0,30);
   }else{
     const commons=await commonsPages(term+' filetype:bitmap',20);commons.forEach(p=>p._source='commons');const loc=await locPages(term,12);pages=[];for(let i=0;i<30&&pages.length<30;i++){if(commons[i])pages.push(commons[i]);if(loc[i])pages.push(loc[i])}
   }status.textContent=pages.length?t.found(pages.length):t.none;const licenseNames=new Set();for(const x of pages){const i=x.imageinfo?.[0],m=i?.extmetadata||{};if(!i)continue;const li=licenseInfo(m),title=x.title.replace(/^File:/,'');const artist=strip(m.Artist?.value)||t.unknown,credit=strip(m.Credit?.value)||t.see;licenseNames.add(li.raw);const card=document.createElement('article');card.className='card';card.dataset.license=li.raw;card.dataset.source=x._source||'commons';card.innerHTML=`<img loading="lazy" src="${esc(i.thumburl||i.url)}" alt="${esc(strip(m.ImageDescription?.value)||title)}"><div class="info"><div class="title" title="${esc(title)}">${esc(title)}</div><div class="meta">${esc(li.raw)}</div><div class="creator">${esc(t.creator)}: ${esc(artist)}</div><div class="actions"><a href="${esc(i.descriptionurl)}" target="_blank" rel="noopener">${esc(t.file)}</a><button class="download" type="button">${esc(t.download)}</button><button class="lic" type="button">${esc(t.license)}</button></div></div>`;card.querySelector('img').onclick=()=>openImage(i.url,title,li.raw,i.descriptionurl);card.querySelector('img').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openImage(i.url,title,li.raw,i.descriptionurl)}};card.querySelector('img').tabIndex=0;card.querySelector('img').setAttribute('role','button');card.querySelector('.download').onclick=()=>downloadImage(i.url,title);card.querySelector('.lic').onclick=()=>{
