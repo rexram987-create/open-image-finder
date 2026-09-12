@@ -247,20 +247,21 @@ async function smithsonianPages(term,limit=16,personMode=false){
       const p=new URLSearchParams({q:query,rows:String(Math.max(limit*4,50))}),r=await fetch('/api/smithsonian?'+p);
       if(!r.ok)continue; const d=await r.json();
       for(const x of (d.results||[])){
-        const title=norm(x.title),meta=norm(x.indexText),creator=norm(x.creator),url=norm(x.url);
+        const title=norm(x.title),nameText=norm(x.namesText),subjectText=norm(x.subjectsText),objectText=norm(x.objectTypesText),creator=norm(x.creator);
         let score=0;
-        if(names.some(n=>title.includes(n)))score+=100;
-        if(names.some(n=>meta.includes(n)))score+=35;
+        if(names.some(n=>title.includes(n)))score+=120;
+        if(names.some(n=>nameText.includes(n)))score+=90;
+        if(names.some(n=>subjectText.includes(n)))score+=70;
+        if(artWords.some(w=>title.includes(w)))score+=25;
+        if(artWords.some(w=>objectText.includes(w)))score+=20;
+        if(artWords.some(w=>subjectText.includes(w)))score+=10;
         if(names.some(n=>creator.includes(n)))score+=10;
-        if(names.some(n=>url.includes(n)))score+=10;
-        if(artWords.some(w=>title.includes(w)))score+=20;
-        if(artWords.some(w=>meta.includes(w)))score+=5;
-        if(personMode&&score<35)continue;
-        const keys=['id:'+norm(x.id),'url:'+url,'img:'+norm(x.image),'thumb:'+norm(x.thumbnail),'title:'+title+'|creator:'+creator].filter(k=>!/:$/.test(k));
+        if(personMode&&score<70)continue;
+        const keys=['id:'+norm(x.id),'url:'+norm(x.url),'img:'+norm(x.image),'thumb:'+norm(x.thumbnail),'title:'+title+'|creator:'+creator].filter(k=>!/:$/.test(k));
         if(keys.some(k=>seen.has(k)))continue; keys.forEach(k=>seen.add(k));
         const image=String(x.image||'').replace(/^http:/,'https:'),thumbnail=String(x.thumbnail||x.image||'').replace(/^http:/,'https:');
         if(!image&&!thumbnail)continue;
-        found.push({score,pageid:'smithsonian-'+(x.id||found.length),title:'File:'+(x.title||'Smithsonian item'),_source:'smithsonian',imageinfo:[{url:image||thumbnail,thumburl:thumbnail||image,descriptionurl:x.url||'https://www.si.edu/openaccess',extmetadata:{LicenseShortName:{value:x.license||'CC0'},UsageTerms:{value:x.license||'CC0'},Artist:{value:x.creator||'Smithsonian Institution'},Credit:{value:'Smithsonian Open Access'},ImageDescription:{value:x.title||''}}}]});
+        found.push({score,pageid:'smithsonian-'+(x.id||found.length),title:'File:'+(x.title||'Smithsonian item'),_source:'smithsonian',imageinfo:[{url:image||thumbnail,thumburl:thumbnail||image,descriptionurl:x.url||'https://www.si.edu/openaccess',extmetadata:{LicenseShortName:{value:x.license||'CC0'},UsageTerms:{value:x.license||'CC0'},Artist:{value:x.creator||'Smithsonian Institution'},Credit:{value:'Smithsonian Open Access'},ImageDescription:{value:[x.title,x.namesText,x.subjectsText,x.objectTypesText].filter(Boolean).join(' · ')}}}]});
       }
     }
     found.sort((a,b)=>b.score-a.score);
