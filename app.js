@@ -165,15 +165,32 @@ async function commonsPages(searchText,limit=30){
 }
 async function locPages(term,limit=12){
   try{
-    const q=new URLSearchParams({q:term,fo:'json',c:String(limit)});
-    const r=await fetch('https://www.loc.gov/photos/?'+q.toString());
+    const q=new URLSearchParams({q:term,fo:'json',c:String(limit),at:'results'});
+    const r=await fetch('https://www.loc.gov/pictures/search/?'+q.toString());
     if(!r.ok)return[];
     const d=await r.json(),out=[];
     for(const x of (d.results||[])){
-      const urls=Array.isArray(x.image_url)?x.image_url:[];
-      const image=urls.find(u=>/^https?:/i.test(u||''));
+      const image=x.image?.full||x.image?.thumb||x.image?.square||'';
       if(!image)continue;
-      out.push({pageid:'loc-'+out.length,title:'File:'+strip(x.title||''),_source:'loc',imageinfo:[{url:image,thumburl:image,descriptionurl:x.id||x.url||'https://www.loc.gov/pictures/',extmetadata:{LicenseShortName:{value:strip(x.rights||x.rights_advisory||'Rights information on item page')},Artist:{value:strip(x.creator||'Library of Congress')},Credit:{value:'Library of Congress'},ImageDescription:{value:strip(x.description||'')}}}]});
+      const itemUrl=x.links?.item||x.link||x.id||'https://www.loc.gov/pictures/';
+      const rights=strip(x.restriction||x.rights||'ראו בדף הפריט');
+      const creator=strip(x.creator||x.created_published_date||'Library of Congress');
+      out.push({
+        pageid:'loc-'+out.length,
+        title:'File:'+strip(x.title||''),
+        _source:'loc',
+        imageinfo:[{
+          url:image.replace(/^http:/,'https:'),
+          thumburl:(x.image?.thumb||image).replace(/^http:/,'https:'),
+          descriptionurl:itemUrl.replace(/^http:/,'https:'),
+          extmetadata:{
+            LicenseShortName:{value:rights},
+            Artist:{value:creator},
+            Credit:{value:'Library of Congress'},
+            ImageDescription:{value:strip(x.summary||'')}
+          }
+        }]
+      });
       if(out.length>=limit)break;
     }
     return out;
