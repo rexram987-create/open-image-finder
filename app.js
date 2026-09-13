@@ -269,6 +269,31 @@ async function smithsonianPages(term,limit=16,personMode=false){
   }catch{return[]}
 }
 
+async function nhmPages(term,limit=12){
+  try{
+    const p=new URLSearchParams({q:term,rows:String(Math.max(limit*2,20))});
+    const r=await fetch('/api/nhm?'+p.toString());
+    if(!r.ok)return[];
+    const d=await r.json();
+    return (d.results||[]).slice(0,limit).map((x,n)=>({
+      pageid:'nhm-'+(x.id||n),
+      title:'File:'+(x.title||'Natural History Museum specimen'),
+      _source:'nhm',
+      imageinfo:[{
+        url:x.image,
+        thumburl:x.thumbnail||x.image,
+        descriptionurl:x.url||'https://data.nhm.ac.uk/',
+        extmetadata:{
+          LicenseShortName:{value:x.license||'CC0 1.0'},
+          UsageTerms:{value:x.license||'CC0 1.0'},
+          Artist:{value:x.creator||'Natural History Museum, London'},
+          Credit:{value:'Natural History Museum, London'},
+          ImageDescription:{value:x.description||x.title||''}
+        }
+      }]
+    })).filter(x=>x.imageinfo?.[0]?.url);
+  }catch{return[]}
+}
 function relevanceScore(page,term){
   const needle=term.toLocaleLowerCase(),m=page.imageinfo?.[0]?.extmetadata||{};
   const title=(page.title||'').replace(/^File:/,'').toLocaleLowerCase();
