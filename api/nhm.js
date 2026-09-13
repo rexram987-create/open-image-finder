@@ -16,18 +16,32 @@ export default async function handler(req,res){
     const records=d?.result?.records||[];
     const results=[];
     for(const x of records){
-      const raw=String(x.associatedMedia||x.media||x.image||'').trim();
-      const urls=(raw.match(/https?:[^\s,;|]+/g)||[]).filter(u=>/\.(jpe?g|png|webp|tif|tiff)(\?|$)/i.test(u)||/image|media|iiif/i.test(u));
-      if(!urls.length)continue;
+      const mediaValues=Object.entries(x)
+        .filter(([k,v])=>/^associatedMedia(?:\.|$)/i.test(k)&&v)
+        .flatMap(([,v])=>Array.isArray(v)?v:[v])
+        .map(v=>String(v));
+
+      const urls=[...new Set(
+        mediaValues.flatMap(v=>v.match(/https?:[^\s,;|"']+/g)||[])
+      )];
+
+      let imageUrl=urls.find(u=>/associatedMedia\.identifier/i.test(u))||'';
+      if(!imageUrl)imageUrl=urls.find(u=>/iiif|image|media/i.test(u))||'';
+      if(!imageUrl)continue;
+
+      imageUrl=imageUrl.replace(/^http:/,'https:');
+
       results.push({
         id:String(x._id||x.occurrenceID||x.catalogNumber||results.length),
-        title:x.scientificName||x.acceptedNameUsage||x.catalogNumber||'Natural History Museum specimen',
-        image:urls[0],
-        thumbnail:urls[0],
-        url:x.occurrenceID&&/^https?:/i.test(String(x.occurrenceID))?String(x.occurrenceID):'https://data.nhm.ac.uk/dataset/collection-specimens/resource/05ff2255-c38a-40c9-b657-4ccb55ab2feb/record/'+String(x._id||''),
+        title:x.scientificName||x.currentScientificName||x.acceptedNameUsage||x.catalogNumber||'Natural History Museum specimen',
+        image:imageUrl,
+        thumbnail:imageUrl,
+        url:x.occurrenceID&&/^https?:/i.test(String(x.occurrenceID))
+          ?String(x.occurrenceID)
+          :'https://data.nhm.ac.uk/dataset/collection-specimens/resource/05ff2255-c38a-40c9-b657-4ccb55ab2feb/record/'+String(x._id||''),
         creator:'Natural History Museum, London',
-        license:'CC0 1.0',
-        description:[x.scientificName,x.family,x.genus,x.collectionCode,x.catalogNumber].filter(Boolean).join(' · ')
+        license:'CC BY 4.0',
+        description:[x.scientificName,x.family,x.genus,x.collectionCode,x.catalogNumber,x.catalogueDescription].filter(Boolean).join(' · ')
       });
     }
     res.setHeader('Cache-Control','public, s-maxage=3600, stale-while-revalidate=86400');
